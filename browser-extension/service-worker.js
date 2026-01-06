@@ -82,6 +82,16 @@ function bytesToEscapedString(rawBytes) {
         .map(b => "\\x" + b.toString(16).padStart(2, "0"))
         .join("");
 }
+// Helper: convert raw bytes to Base64
+function bytesToBase64(rawBytes) {
+    const uint8 = new Uint8Array(rawBytes);
+    let binary = "";
+    for (let i = 0; i < uint8.length; i++) {
+        binary += String.fromCharCode(uint8[i]);
+    }
+    return btoa(binary);
+}
+
 chrome.webRequest.onBeforeRequest.addListener(
     (details) => {
         if (details.method === "POST" && /license/i.test(details.url)) {
@@ -95,12 +105,15 @@ chrome.webRequest.onBeforeRequest.addListener(
                 if (details.requestBody.raw && details.requestBody.raw.length > 0) {
                     // For binary data, do not assume UTF-8; convert to escaped hex
                     dataStr = bytesToEscapedString(details.requestBody.raw[0].bytes);
+                    base64Str = bytesToBase64(details.requestBody.raw[0].bytes);
                 } else if (details.requestBody.formData) {
                     // For form data, you could JSON-stringify it or build key=value pairs
                     dataStr = JSON.stringify(details.requestBody.formData);
+                    base64Str = JSON.stringify(details.requestBody.formData);
                 }
             }
             storeTabData(tabId, 'licenseData', dataStr)
+            storeTabData(tabId, 'licenseBase64', base64Str)
             storeTabData(tabId, 'licenseUrl', details.url)
         }
     },
@@ -124,12 +137,14 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
             let headerString = "";
             // If you want to append headers to the cURL command, format them accordingly
             for (const name in headers) {
-                headerString += ` -H '${name}: ${headers[name]}'`;
+                // Use double quotes for Windows compatibility
+                const escapedValue = headers[name].replace(/"/g, '\\"');
+                headerString += ` -H "${name}: ${escapedValue}"`;
             }
+            storeTabData(tabId, 'headers', headers); // Store the raw headers object
             storeTabData(tabId, 'headerString', headerString)
             console.log("Matched Request Headers:", headers);
             console.log("cURL headers part:", headerString);
-            // You might also want to combine this with your earlier cURL command
         }
     },
     { urls: ["<all_urls>"] },
@@ -144,13 +159,16 @@ function curlCommand(tabId) {
     const licenseUrl = tabInfo.licenseUrl || "";
     const headerString = tabInfo.headerString || "";
     const licenseData = tabInfo.licenseData || "";
+    const licenseBase64 = tabInfo.licenseBase64 || "";
 
     // Return empty string if any of them are missing
     if (!licenseUrl || !headerString || !licenseData) {
         return "";
     }
 
-    return `curl '${licenseUrl}' ${headerString} --data-raw $'${licenseData}'`;
+    // Windows-compatible: use double quotes and escape backslashes and quotes
+    const escapedData = licenseData.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    return `curl "${licenseUrl}" ${headerString} --data-raw "${escapedData}"`;
 }
 
 
@@ -188,14 +206,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                 return;
             }
 
-            // Create an object with the necessary parameters.
+            // Create an object with the necessary parameters for allhell3.py
             const dataToSend = {
-                manifestUrl: tabData[tabId].manifestUrl || "",   // GET request URL
-                licenseCurl: curlCommand(tabId),    // POST cURL command
-                title: tabData[tabId].title || msg.title // The title from the popup
+                manifestUrl: tabData[tabId].manifestUrl || "",
+                licenseUrl: tabData[tabId].licenseUrl || "",
+                bodyBase64: tabData[tabId].licenseBase64 || "", // The script expects bodyBase64
+                headers: tabData[tabId].headers || {},          // The script expects a dict
+                title: msg.title || tabData[tabId].title || "video", // Prioritize user input
+                deleteMe: false
             };
 
-            console.log("Curl command:", curlCommand(tabId));
+            console.log("Sending data to native host:", dataToSend);
 
             // Send the collected data to the native host
             chrome.runtime.sendNativeMessage(
