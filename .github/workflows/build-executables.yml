@@ -38,6 +38,7 @@ jobs:
         python -m PyInstaller --clean native_host.spec
 
     - name: Prepare distribution directory
+      shell: cmd
       run: |
         mkdir HellSharedAutoProcessor
         copy dist\HellSharedAutoProcessor.exe HellSharedAutoProcessor\
