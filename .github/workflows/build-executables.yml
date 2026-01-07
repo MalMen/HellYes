@@ -1,0 +1,132 @@
+name: Build HellSharedAutoProcessor Executables
+
+on:
+  push:
+    branches: [ main, feat/*, develop ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ created ]
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyinstaller pillow
+        pip install -r requirements.txt
+
+    - name: Create icon file
+      run: |
+        python -c "from PIL import Image; img = Image.open('browser-extension/logo/hellyes_original.png'); img.save('hellyes.ico', format='ICO', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])"
+
+    - name: Build Windows executable
+      run: |
+        python -m PyInstaller --clean allhell3_auto_processor_onefile.spec
+        python -m PyInstaller --clean native_host.spec
+
+    - name: Prepare distribution directory
+      run: |
+        mkdir HellSharedAutoProcessor
+        copy dist\HellSharedAutoProcessor.exe HellSharedAutoProcessor\
+        copy dist\HellSharedNativeHost.exe HellSharedAutoProcessor\
+        if exist README.md copy README.md HellSharedAutoProcessor\
+        if exist LICENSE copy LICENSE HellSharedAutoProcessor\
+        if exist BUILDING.md copy BUILDING.md HellSharedAutoProcessor\
+
+    - name: Create Windows archive
+      run: |
+        powershell Compress-Archive -Path HellSharedAutoProcessor -DestinationPath HellSharedAutoProcessor.win.zip
+
+    - name: Upload Windows artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: HellSharedAutoProcessor-Windows
+        path: HellSharedAutoProcessor.win.zip
+        retention-days: 30
+
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyinstaller pillow
+        pip install -r requirements.txt
+
+    - name: Create icon file
+      run: |
+        python -c "from PIL import Image; img = Image.open('browser-extension/logo/hellyes_original.png'); img.save('hellyes.ico', format='ICO', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])"
+
+    - name: Build Linux executable
+      run: |
+        pyinstaller --clean allhell3_auto_processor_onefile.spec
+        pyinstaller --clean native_host.spec
+
+    - name: Prepare distribution directory
+      run: |
+        mkdir -p HellSharedAutoProcessor
+        cp dist/HellSharedAutoProcessor HellSharedAutoProcessor/
+        cp dist/HellSharedNativeHost HellSharedAutoProcessor/
+        chmod +x HellSharedAutoProcessor/HellSharedAutoProcessor
+        chmod +x HellSharedAutoProcessor/HellSharedNativeHost
+        if [ -f README.md ]; then cp README.md HellSharedAutoProcessor/; fi
+        if [ -f LICENSE ]; then cp LICENSE HellSharedAutoProcessor/; fi
+        if [ -f BUILDING.md ]; then cp BUILDING.md HellSharedAutoProcessor/; fi
+
+    - name: Create Linux archive
+      run: |
+        tar -czf HellSharedAutoProcessor.linux.tar.gz HellSharedAutoProcessor
+
+    - name: Upload Linux artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: HellSharedAutoProcessor-Linux
+        path: HellSharedAutoProcessor.linux.tar.gz
+        retention-days: 30
+
+  release:
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+
+    steps:
+    - name: Download Windows artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: HellSharedAutoProcessor-Windows
+
+    - name: Download Linux artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: HellSharedAutoProcessor-Linux
+
+    - name: Upload to Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          HellSharedAutoProcessor.win.zip
+          HellSharedAutoProcessor.linux.tar.gz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
