@@ -861,9 +861,28 @@ class InstallerGUI:
                 return False
         else:
             # Linux/macOS
-            step.log("This step requires running the installation script...")
-            step.log("Please run: bash install/browsers.sh")
-            return False
+            step.log("Running Linux/macOS browser installer...")
+            python_cmd = 'python3'
+            install_script = self.install_dir / "browsers_linux.py"
+
+            if not install_script.exists():
+                step.log(f"❌ Error: browsers_linux.py not found at {install_script}!")
+                return False
+
+            # Run the Linux browser installer in silent mode (no prompts)
+            step.log("Installing with default extension ID (compiled extension)...")
+            success, output = DependencyInstaller.run_command(
+                [python_cmd, str(install_script), '--silent'],
+                shell=False
+            )
+            step.log(output)
+
+            if success:
+                step.log("✅ Browser manifest installation completed!")
+                return True
+            else:
+                step.log("⚠️ Browser manifest installation had issues")
+                return False
 
     # Manual instruction dialogs
 
@@ -2090,13 +2109,38 @@ class InstallerGUI:
                 except Exception as e:
                     self.show_error("Error", f"Installation error:\n{str(e)}")
             else:
-                # Linux/macOS
-                self.show_info(
-                    "Firefox Installation",
-                    "On Linux/macOS, please run:\n\n"
-                    "bash install/browsers.sh\n\n"
-                    "And select Firefox from the options."
+                # Linux/macOS - same process as Windows
+                result = self.ask_yesno(
+                    "Install Firefox Manifest",
+                    "This will install the native messaging host for Firefox.\n\n"
+                    "Continue?"
                 )
+                if not result:
+                    return
+
+                try:
+                    python_cmd = 'python3'
+                    install_script = self.install_dir / "browsers_linux.py"
+
+                    if not install_script.exists():
+                        self.show_error("Error", f"browsers_linux.py not found at {install_script}!")
+                        return
+
+                    # Run installer for Firefox only
+                    success, output = DependencyInstaller.run_command(
+                        [python_cmd, str(install_script), '--silent', '--firefox-only'],
+                        shell=False
+                    )
+
+                    if success:
+                        self.show_info("Success", "Firefox native messaging host installed!")
+                        update_status()
+                        self.check_and_update_browser_manifest_step()
+                    else:
+                        self.show_error("Error", f"Installation failed:\n{output}")
+
+                except Exception as e:
+                    self.show_error("Error", f"Installation error:\n{str(e)}")
 
         def install_chrome():
             """Install Chrome-based browsers native messaging manifest with extension ID dialog"""
@@ -2177,13 +2221,29 @@ class InstallerGUI:
                     except Exception as e:
                         self.show_error("Error", f"Installation error:\n{str(e)}")
                 else:
-                    # Linux/macOS
-                    self.show_info(
-                        "Chrome Installation",
-                        f"On Linux/macOS, please run:\n\n"
-                        f"bash install/browsers.sh\n\n"
-                        f"And provide extension ID: {ext_id}"
-                    )
+                    # Linux/macOS - same process as Windows
+                    try:
+                        python_cmd = 'python3'
+                        install_script = self.install_dir / "browsers_linux.py"
+
+                        if not install_script.exists():
+                            self.show_error("Error", f"browsers_linux.py not found at {install_script}!")
+                            return
+
+                        success, output = DependencyInstaller.run_command(
+                            [python_cmd, str(install_script), '--silent', '--extension-id', ext_id, '--chrome-only'],
+                            shell=False
+                        )
+
+                        if success:
+                            self.show_info("Success", "Chrome-based browsers native messaging host installed!")
+                            update_status()
+                            self.check_and_update_browser_manifest_step()
+                        else:
+                            self.show_error("Error", f"Installation failed:\n{output}")
+
+                    except Exception as e:
+                        self.show_error("Error", f"Installation error:\n{str(e)}")
 
             btn_frame = ttk.Frame(dialog_frame)
             btn_frame.pack(fill=X, pady=(15, 0))
