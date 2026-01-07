@@ -22,17 +22,36 @@ if sys.platform == "win32":
         pass
 
 def get_script_dir():
-    """Get the project root directory"""
-    return Path(__file__).parent.parent.absolute()
+    """Get the project root directory (where the executable or scripts are located)"""
+    script_file = Path(__file__).absolute()
+
+    # Check if this script is in a temp directory (extracted from executable)
+    if 'Temp' in str(script_file) or 'tmp' in str(script_file):
+        # Running from extracted executable
+        # The working directory should be where the executables are
+        return Path.cwd().absolute()
+    else:
+        # Running from source - use parent of this script's directory
+        return script_file.parent.parent.absolute()
 
 def get_native_script_path():
-    """Get the path to native.py with proper Windows path format"""
+    """Get the path to native host executable with proper Windows path format"""
     script_dir = get_script_dir()
 
-    # On Windows, we need to call python with the native.py script
-    # Create a batch file wrapper
+    # First, try to find the standalone executable (preferred)
+    native_exe = script_dir / "HellSharedNativeHost.exe"
+    if native_exe.exists():
+        return str(native_exe)
+
+    # Fallback: use native.py with batch wrapper for development
     native_py = script_dir / "native.py"
     native_bat = script_dir / "native.bat"
+
+    if not native_py.exists():
+        raise FileNotFoundError(
+            f"Neither HellSharedNativeHost.exe nor native.py found in {script_dir}\n"
+            f"Please run the build script or place native.py in the project directory."
+        )
 
     # Create the batch wrapper if it doesn't exist
     if not native_bat.exists():
@@ -271,6 +290,98 @@ def install_browsers_manifest(extension_id=None):
 
     return len([r for r in results if r.startswith("[OK]")]) > 0
 
+def install_browsers_manifest_filtered(extension_id=None, firefox_only=False, chrome_only=False):
+    """Install browser manifests with filter for specific browser types"""
+    script_dir = get_script_dir()
+    results = []
+
+    print("=" * 60)
+    print("HellYes Browser Native Messaging Host Installer (Windows)")
+    print("=" * 60)
+    print()
+
+    # Firefox installation
+    if firefox_only or not chrome_only:
+        if check_browser_installed("Firefox"):
+            print("[+] Installing for Mozilla Firefox")
+            print()
+
+            # Create Firefox manifest
+            firefox_manifest = build_firefox_manifest()
+            manifest_path = script_dir / "native_manifest_firefox.json"
+            create_manifest_file(firefox_manifest, manifest_path)
+
+            # Register for Firefox
+            if register_firefox_manifest(manifest_path):
+                results.append(f"[OK] Registered for Mozilla Firefox")
+            else:
+                results.append(f"[FAIL] Failed to register for Mozilla Firefox")
+        else:
+            print("[!] Firefox not detected on this system")
+
+    # Chrome-based browsers installation
+    if chrome_only or not firefox_only:
+        chrome_browsers = []
+        if check_browser_installed("Chrome"):
+            chrome_browsers.append("Chrome")
+        if check_browser_installed("Edge"):
+            chrome_browsers.append("Edge")
+        if check_browser_installed("Brave"):
+            chrome_browsers.append("Brave")
+
+        if chrome_browsers:
+            print(f"[+] Installing for Chrome-based browsers: {', '.join(chrome_browsers)}")
+            print()
+
+            if extension_id is None:
+                extension_id = "kiepegiehgkjkbebfagoadghjdfkegpc"
+
+            print(f"Using Extension ID: {extension_id}")
+            print()
+
+            # Create Chrome manifest
+            chrome_manifest = build_chrome_manifest(extension_id)
+            manifest_path = script_dir / "native_manifest_chrome.json"
+            create_manifest_file(chrome_manifest, manifest_path)
+
+            # Register for each browser
+            for browser in chrome_browsers:
+                if browser == "Chrome":
+                    if register_chrome_manifest(manifest_path):
+                        results.append(f"[OK] Registered for Google Chrome")
+                    else:
+                        results.append(f"[FAIL] Failed to register for Google Chrome")
+
+                elif browser == "Edge":
+                    if register_edge_manifest(manifest_path):
+                        results.append(f"[OK] Registered for Microsoft Edge")
+                    else:
+                        results.append(f"[FAIL] Failed to register for Microsoft Edge")
+
+                elif browser == "Brave":
+                    if register_brave_manifest(manifest_path):
+                        results.append(f"[OK] Registered for Brave Browser")
+                    else:
+                        results.append(f"[FAIL] Failed to register for Brave Browser")
+        else:
+            print("[!] No Chrome-based browsers detected on this system")
+
+    # Print results
+    print()
+    print("=" * 60)
+    print("Installation Results:")
+    print("=" * 60)
+    for result in results:
+        print(result)
+
+    if not results:
+        print("[!] No browsers were configured!")
+
+    print()
+    print("=" * 60)
+
+    return len([r for r in results if r.startswith("[OK]")]) > 0
+
 if __name__ == "__main__":
     import argparse
 
@@ -284,13 +395,27 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Install browser native messaging host for Windows")
     parser.add_argument("--silent", action="store_true", help="Run in silent mode (no prompts)")
     parser.add_argument("--extension-id", type=str, help="Chrome extension ID (default: compiled extension)")
+    parser.add_argument("--firefox-only", action="store_true", help="Install only for Firefox")
+    parser.add_argument("--chrome-only", action="store_true", help="Install only for Chrome-based browsers")
     args = parser.parse_args()
 
     try:
-        # If silent mode, use default extension ID
-        if args.silent:
+        # Determine which browsers to install
+        if args.firefox_only and args.chrome_only:
+            print("[ERROR] Cannot use both --firefox-only and --chrome-only")
+            sys.exit(1)
+
+        # If silent mode or specific browser mode, use appropriate extension ID
+        if args.silent or args.firefox_only or args.chrome_only:
             extension_id = args.extension_id or "kiepegiehgkjkbebfagoadghjdfkegpc"
-            success = install_browsers_manifest(extension_id=extension_id)
+
+            # Call install function with browser filter
+            if args.firefox_only:
+                success = install_browsers_manifest_filtered(extension_id=extension_id, firefox_only=True)
+            elif args.chrome_only:
+                success = install_browsers_manifest_filtered(extension_id=extension_id, chrome_only=True)
+            else:
+                success = install_browsers_manifest(extension_id=extension_id)
         else:
             success = install_browsers_manifest(extension_id=args.extension_id)
 

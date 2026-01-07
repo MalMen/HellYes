@@ -237,16 +237,43 @@ if __name__ == "__main__":
     downloads_dir = Path("downloads")
     downloads_dir.mkdir(exist_ok=True)
 
-    # Add bin/ to PATH so executables can be found (like /usr/local/bin)
-    bin_dir = Path(__file__).parent / "bin"
+    # Find N_m3u8DL-RE executable - check both bin/ and current directory
+    script_path = Path(__file__).absolute()
+
+    # Determine base directory
+    if hasattr(sys, '_MEIPASS') or 'Temp' in str(script_path) or 'tmp' in str(script_path):
+        # Running from executable - use current working directory
+        base_dir = Path.cwd()
+    else:
+        # Running from source - use script's parent directory
+        base_dir = script_path.parent
+
+    # Determine executable name based on platform
+    exe_name = "N_m3u8DL-RE.exe" if sys.platform == 'win32' else "N_m3u8DL-RE"
+
+    # Check multiple locations for the executable
+    possible_locations = [
+        base_dir / "bin" / exe_name,      # Preferred: bin/ subdirectory
+        base_dir / exe_name,              # Fallback: same directory as exe
+    ]
+
+    n_m3u8dl_exe = None
+    bin_dir = None
+    for location in possible_locations:
+        if location.exists():
+            n_m3u8dl_exe = str(location)
+            bin_dir = location.parent
+            break
+
+    if n_m3u8dl_exe is None:
+        print(colored(f"ERROR: {exe_name} not found in:", "red"))
+        for loc in possible_locations:
+            print(colored(f"  - {loc}", "red"))
+        sys.exit(1)
+
+    # Add bin directory to PATH
     env = os.environ.copy()
     env['PATH'] = str(bin_dir.absolute()) + os.pathsep + env.get('PATH', '')
-
-    # Determine executable path based on platform
-    if sys.platform == 'win32':
-        n_m3u8dl_exe = str(bin_dir / "N_m3u8DL-RE.exe")
-    else:
-        n_m3u8dl_exe = str(bin_dir / "N_m3u8DL-RE")
 
     cmd = [
         n_m3u8dl_exe, mpd, *sum((k.split() for k in keys), []),

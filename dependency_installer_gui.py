@@ -14,6 +14,13 @@ from pathlib import Path
 from tkinter import *
 from tkinter import ttk, scrolledtext, messagebox
 
+# Try to import pywidevine for device creation
+try:
+    from pywidevine.device import Device, DeviceTypes
+    PYWIDEVINE_AVAILABLE = True
+except ImportError:
+    PYWIDEVINE_AVAILABLE = False
+
 class DependencyInstaller:
     """Handles checking and installing individual dependencies"""
 
@@ -21,13 +28,17 @@ class DependencyInstaller:
     def run_command(cmd, shell=False):
         """Run a command and return success status and output"""
         try:
-            result = subprocess.run(
-                cmd,
-                shell=shell,
-                capture_output=True,
-                text=True,
-                timeout=300
-            )
+            # On Windows, hide console window
+            kwargs = {
+                'shell': shell,
+                'capture_output': True,
+                'text': True,
+                'timeout': 300
+            }
+            if platform.system() == 'Windows':
+                kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+
+            result = subprocess.run(cmd, **kwargs)
             return result.returncode == 0, result.stdout + result.stderr
         except Exception as e:
             return False, str(e)
@@ -36,10 +47,17 @@ class DependencyInstaller:
     def check_command(cmd):
         """Check if a command is available"""
         try:
+            # On Windows, hide console window
+            kwargs = {
+                'capture_output': True,
+                'timeout': 5
+            }
+            if platform.system() == 'Windows':
+                kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+
             result = subprocess.run(
                 ['which', cmd] if platform.system() != 'Windows' else ['where', cmd],
-                capture_output=True,
-                timeout=5
+                **kwargs
             )
             return result.returncode == 0
         except:
@@ -379,12 +397,19 @@ class DependencyStep:
 class InstallerGUI:
     """Main installer GUI window"""
 
-    def __init__(self, root):
+    def __init__(self, root, install_dir=None):
         self.root = root
         self.root.title("HellShared Dependency Installer")
         self.root.geometry("950x800")
         self.root.minsize(900, 700)  # Set minimum size to ensure all content is visible
         self.root.maxsize(1400, 900)  # Set max size for small screens
+
+        # Set install directory (for finding browsers_windows.py etc)
+        if install_dir:
+            self.install_dir = Path(install_dir)
+        else:
+            # Fallback to local install directory
+            self.install_dir = Path("install")
 
         self.steps = []
         self.current_step_index = 0
@@ -393,6 +418,23 @@ class InstallerGUI:
         self.setup_ui()
         self.setup_steps()
         self.check_all_dependencies()
+
+    # Helper methods for messageboxes that use correct parent window
+    def show_info(self, title, message):
+        """Show info dialog with correct parent"""
+        return messagebox.showinfo(title, message, parent=self.root)
+
+    def show_error(self, title, message):
+        """Show error dialog with correct parent"""
+        return messagebox.showerror(title, message, parent=self.root)
+
+    def show_warning(self, title, message):
+        """Show warning dialog with correct parent"""
+        return messagebox.showwarning(title, message, parent=self.root)
+
+    def ask_yesno(self, title, message):
+        """Show yes/no dialog with correct parent"""
+        return messagebox.askyesno(title, message, parent=self.root)
 
     def setup_ui(self):
         """Setup the main UI"""
@@ -586,7 +628,8 @@ class InstallerGUI:
             "Native messaging host for browser extension",
             installer.check_browser_manifest,
             self.install_browser_manifest,
-            auto_install=True
+            manual_instructions_func=self.show_browser_manifest_instructions,
+            auto_install=False
         ))
 
     def update_progress(self):
@@ -797,10 +840,10 @@ class InstallerGUI:
         if platform.system() == 'Windows':
             step.log("Running Windows browser installer...")
             python_cmd = 'python'
-            install_script = Path("install/browsers_windows.py")
+            install_script = self.install_dir / "browsers_windows.py"
 
             if not install_script.exists():
-                step.log("❌ Error: install/browsers_windows.py not found!")
+                step.log(f"❌ Error: browsers_windows.py not found at {install_script}!")
                 return False
 
             # Run the Windows browser installer in silent mode (no prompts)
@@ -920,57 +963,60 @@ class InstallerGUI:
                 log_message("📦 Creating device.wvd automatically...")
 
                 try:
-                    # Run pywidevine command
-                    if platform.system() == 'Windows':
-                        cmd = ['venv\\Scripts\\pywidevine.exe', 'create-device', '-k', 'private_key.pem',
-                               '-c', 'client_id.bin', '-t', 'ANDROID', '-l', '3']
-                    else:
-                        cmd = ['./venv/bin/pywidevine', 'create-device', '-k', 'private_key.pem',
-                               '-c', 'client_id.bin', '-t', 'ANDROID', '-l', '3']
+                    if not PYWIDEVINE_AVAILABLE:
+                        log_message("❌ Error: pywidevine library not available")
+                        log_message("This should not happen in the bundled executable")
+                        status_label.config(text="❌ pywidevine library not available", foreground="red")
+                        return
 
-                    log_message(f"Running: {' '.join(cmd)}")
+                    # Read the key files
+                    log_message("Reading client_id.bin...")
+                    with open("client_id.bin", "rb") as f:
+                        client_id = f.read()
 
-                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-                    log_message(result.stdout)
-                    if result.stderr:
-                        log_message(result.stderr)
+                    log_message("Reading private_key.pem...")
+                    with open("private_key.pem", "rb") as f:
+                        private_key = f.read()
 
-                    if result.returncode == 0:
-                        # Find and rename the .wvd file
-                        wvd_files = list(Path(".").glob("*.wvd"))
-                        if wvd_files:
-                            wvd_file = wvd_files[0]
-                            if wvd_file.name != "device.wvd":
-                                wvd_file.rename("device.wvd")
-                                log_message(f"✅ Renamed {wvd_file.name} to device.wvd")
-                            log_message("=" * 60)
-                            log_message("🎉 device.wvd created successfully!")
-                            status_label.config(text="🎉 Success! device.wvd created", foreground="green")
+                    # Create Device object
+                    log_message("Creating Widevine device...")
+                    device = Device(
+                        type_=DeviceTypes.ANDROID,
+                        security_level=3,
+                        flags=None,
+                        private_key=private_key,
+                        client_id=client_id
+                    )
 
-                            # Update the main installer step
-                            for step in self.steps:
-                                if step.name == "Widevine Device (device.wvd)":
-                                    step.mark_complete(True)
-                                    break
+                    # Save to device.wvd
+                    log_message("Saving to device.wvd...")
+                    device.dump("device.wvd")
 
-                            self.update_progress()
+                    log_message("=" * 60)
+                    log_message("🎉 device.wvd created successfully!")
+                    status_label.config(text="🎉 Success! device.wvd created", foreground="green")
 
-                            messagebox.showinfo(
-                                "Success!",
-                                "✅ device.wvd has been created successfully!\n\n"
-                                "The wizard will now close."
-                            )
-                            window.destroy()
-                            return
-                        else:
-                            log_message("❌ No .wvd file was created")
-                            status_label.config(text="❌ Creation failed - no .wvd file generated", foreground="red")
-                    else:
-                        log_message(f"❌ Command failed with exit code {result.returncode}")
-                        status_label.config(text="❌ Creation failed - check log for details", foreground="red")
+                    # Update the main installer step
+                    for step in self.steps:
+                        if step.name == "Widevine Device (device.wvd)":
+                            step.mark_complete(True)
+                            break
+
+                    self.update_progress()
+
+                    messagebox.showinfo(
+                        "Success!",
+                        "✅ device.wvd has been created successfully!\n\n"
+                        "The wizard will now close."
+                    )
+                    window.destroy()
+                    return
 
                 except Exception as e:
+                    import traceback
+                    error_details = traceback.format_exc()
                     log_message(f"❌ Error: {str(e)}")
+                    log_message(error_details)
                     status_label.config(text="❌ Creation failed - check log for details", foreground="red")
 
                 log_message("=" * 60)
@@ -1898,6 +1944,267 @@ class InstallerGUI:
         log_message("-" * 60)
         window.after(500, check_file)
         window.after(3500, periodic_check)
+
+    def show_browser_manifest_instructions(self):
+        """Show browser manifest installation wizard with separate buttons for Firefox and Chrome"""
+        window = Toplevel(self.root)
+        window.title("Browser Native Messaging Setup")
+        window.geometry("700x500")
+        window.minsize(650, 450)
+        window.maxsize(1000, 700)
+        window.transient(self.root)
+        window.grab_set()
+        window.lift()
+        window.focus_force()
+
+        main_frame = ttk.Frame(window, padding="15")
+        main_frame.pack(fill=BOTH, expand=True)
+
+        # Title
+        title = ttk.Label(main_frame, text="📖 Browser Native Messaging Setup", font=("Arial", 14, "bold"))
+        title.pack(pady=(0, 10))
+
+        # Instructions
+        inst_frame = ttk.LabelFrame(main_frame, text="📋 Instructions", padding="10")
+        inst_frame.pack(fill=X, pady=(0, 10))
+
+        inst_text = ttk.Label(inst_frame, text=(
+            "Choose which browser(s) you want to configure:\n\n"
+            "• Firefox: No extension ID needed\n"
+            "• Chrome-based browsers: Requires extension ID\n"
+            "  (Chrome, Edge, Brave, Chromium)\n\n"
+            "You can install for both Firefox and Chrome-based browsers."
+        ), font=("Arial", 9), justify=LEFT)
+        inst_text.pack(anchor=W)
+
+        # Current status
+        status_frame = ttk.LabelFrame(main_frame, text="Current Status", padding="10")
+        status_frame.pack(fill=X, pady=(10, 0))
+
+        status_text = scrolledtext.ScrolledText(status_frame, wrap=WORD, font=("Courier New", 9), height=8)
+        status_text.pack(fill=BOTH, expand=True)
+
+        def update_status():
+            """Check and display current browser configuration status"""
+            status_text.delete(1.0, END)
+
+            if platform.system() == 'Windows':
+                import winreg
+                browsers_checked = {
+                    "Chrome": r"Software\Google\Chrome\NativeMessagingHosts\org.hellyes.hellyes",
+                    "Edge": r"Software\Microsoft\Edge\NativeMessagingHosts\org.hellyes.hellyes",
+                    "Firefox": r"Software\Mozilla\NativeMessagingHosts\org.hellyes.hellyes",
+                    "Brave": r"Software\BraveSoftware\Brave-Browser\NativeMessagingHosts\org.hellyes.hellyes",
+                }
+
+                for browser, reg_path in browsers_checked.items():
+                    try:
+                        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path)
+                        manifest_path, _ = winreg.QueryValueEx(key, "")
+                        winreg.CloseKey(key)
+
+                        if Path(manifest_path).exists():
+                            status_text.insert(END, f"✓ {browser}: Configured\n", "success")
+                        else:
+                            status_text.insert(END, f"✗ {browser}: Registry entry exists but manifest file missing\n", "warning")
+                    except FileNotFoundError:
+                        status_text.insert(END, f"○ {browser}: Not configured\n", "info")
+            else:
+                # Linux/macOS
+                manifests = {
+                    "Chrome": Path.home() / ".config/google-chrome/NativeMessagingHosts/org.hellyes.hellyes.json",
+                    "Chromium": Path.home() / ".config/chromium/NativeMessagingHosts/org.hellyes.hellyes.json",
+                    "Firefox": Path.home() / ".mozilla/native-messaging-hosts/org.hellyes.hellyes.json",
+                    "Brave": Path.home() / ".config/BraveSoftware/Brave-Browser/NativeMessagingHosts/org.hellyes.hellyes.json",
+                }
+
+                for browser, manifest_path in manifests.items():
+                    if manifest_path.exists():
+                        status_text.insert(END, f"✓ {browser}: Configured\n", "success")
+                    else:
+                        status_text.insert(END, f"○ {browser}: Not configured\n", "info")
+
+            status_text.tag_config("success", foreground="green")
+            status_text.tag_config("warning", foreground="orange")
+            status_text.tag_config("info", foreground="gray")
+
+        # Initial status check
+        update_status()
+
+        # Buttons frame
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill=X, pady=(15, 0))
+
+        def install_firefox():
+            """Install Firefox native messaging manifest"""
+            if platform.system() == 'Windows':
+                result = self.ask_yesno(
+                    "Install Firefox Manifest",
+                    "This will install the native messaging host for Firefox.\n\n"
+                    "Continue?"
+                )
+                if not result:
+                    return
+
+                try:
+                    python_cmd = 'python'
+                    install_script = self.install_dir / "browsers_windows.py"
+
+                    if not install_script.exists():
+                        self.show_error("Error", f"browsers_windows.py not found at {install_script}!")
+                        return
+
+                    # Run installer for Firefox only (we'll modify the script to support this)
+                    success, output = DependencyInstaller.run_command(
+                        [python_cmd, str(install_script), '--silent', '--firefox-only'],
+                        shell=False
+                    )
+
+                    if success:
+                        self.show_info("Success", "Firefox native messaging host installed!")
+                        update_status()
+                        self.check_and_update_browser_manifest_step()
+                    else:
+                        self.show_error("Error", f"Installation failed:\n{output}")
+
+                except Exception as e:
+                    self.show_error("Error", f"Installation error:\n{str(e)}")
+            else:
+                # Linux/macOS
+                self.show_info(
+                    "Firefox Installation",
+                    "On Linux/macOS, please run:\n\n"
+                    "bash install/browsers.sh\n\n"
+                    "And select Firefox from the options."
+                )
+
+        def install_chrome():
+            """Install Chrome-based browsers native messaging manifest with extension ID dialog"""
+            # Create extension ID dialog
+            id_dialog = Toplevel(window)
+            id_dialog.title("Chrome Extension ID")
+            id_dialog.geometry("500x250")
+            id_dialog.transient(window)
+            id_dialog.grab_set()
+
+            dialog_frame = ttk.Frame(id_dialog, padding="20")
+            dialog_frame.pack(fill=BOTH, expand=True)
+
+            ttk.Label(dialog_frame, text="Chrome Extension Configuration", font=("Arial", 12, "bold")).pack(pady=(0, 10))
+
+            ttk.Label(dialog_frame, text="Select extension type:", font=("Arial", 10)).pack(anchor=W, pady=(10, 5))
+
+            extension_type = StringVar(value="compiled")
+
+            ttk.Radiobutton(
+                dialog_frame,
+                text="Compiled Extension (Official - default)",
+                variable=extension_type,
+                value="compiled"
+            ).pack(anchor=W, padx=20)
+
+            ttk.Radiobutton(
+                dialog_frame,
+                text="Unpacked Extension (Development mode)",
+                variable=extension_type,
+                value="unpacked"
+            ).pack(anchor=W, padx=20, pady=(5, 0))
+
+            # Extension ID input (for unpacked)
+            id_frame = ttk.Frame(dialog_frame)
+            id_frame.pack(fill=X, pady=(15, 0))
+
+            ttk.Label(id_frame, text="Extension ID (for unpacked):").pack(anchor=W)
+
+            extension_id_var = StringVar(value="kiepegiehgkjkbebfagoadghjdfkegpc")
+            id_entry = ttk.Entry(id_frame, textvariable=extension_id_var, width=40)
+            id_entry.pack(fill=X, pady=(5, 0))
+
+            def on_install():
+                ext_type = extension_type.get()
+                ext_id = extension_id_var.get().strip()
+
+                if ext_type == "compiled":
+                    ext_id = "kiepegiehgkjkbebfagoadghjdfkegpc"  # Default compiled extension ID
+                elif not ext_id:
+                    messagebox.showerror("Error", "Please enter an extension ID for unpacked extension!", parent=id_dialog)
+                    return
+
+                id_dialog.destroy()
+
+                # Proceed with installation
+                if platform.system() == 'Windows':
+                    try:
+                        python_cmd = 'python'
+                        install_script = self.install_dir / "browsers_windows.py"
+
+                        if not install_script.exists():
+                            self.show_error("Error", f"browsers_windows.py not found at {install_script}!")
+                            return
+
+                        success, output = DependencyInstaller.run_command(
+                            [python_cmd, str(install_script), '--silent', '--extension-id', ext_id, '--chrome-only'],
+                            shell=False
+                        )
+
+                        if success:
+                            self.show_info("Success", "Chrome-based browsers native messaging host installed!")
+                            update_status()
+                            self.check_and_update_browser_manifest_step()
+                        else:
+                            self.show_error("Error", f"Installation failed:\n{output}")
+
+                    except Exception as e:
+                        self.show_error("Error", f"Installation error:\n{str(e)}")
+                else:
+                    # Linux/macOS
+                    self.show_info(
+                        "Chrome Installation",
+                        f"On Linux/macOS, please run:\n\n"
+                        f"bash install/browsers.sh\n\n"
+                        f"And provide extension ID: {ext_id}"
+                    )
+
+            btn_frame = ttk.Frame(dialog_frame)
+            btn_frame.pack(fill=X, pady=(15, 0))
+
+            ttk.Button(btn_frame, text="Install", command=on_install).pack(side=LEFT, padx=(0, 5))
+            ttk.Button(btn_frame, text="Cancel", command=id_dialog.destroy).pack(side=LEFT)
+
+        ttk.Button(
+            button_frame,
+            text="🦊 Install for Firefox",
+            command=install_firefox
+        ).pack(side=LEFT, padx=(0, 10))
+
+        ttk.Button(
+            button_frame,
+            text="🌐 Install for Chrome-based Browsers",
+            command=install_chrome
+        ).pack(side=LEFT, padx=(0, 10))
+
+        ttk.Button(
+            button_frame,
+            text="🔄 Refresh Status",
+            command=update_status
+        ).pack(side=LEFT, padx=(0, 10))
+
+        ttk.Button(
+            button_frame,
+            text="Close",
+            command=window.destroy
+        ).pack(side=RIGHT)
+
+    def check_and_update_browser_manifest_step(self):
+        """Check browser manifest and update the installation step status"""
+        for step in self.steps:
+            if step.name == "Browser Extension Manifest":
+                if step.check():
+                    step.mark_complete(True)
+                else:
+                    step.mark_complete(False)
+                break
+        self.update_progress()
 
 
 def main():

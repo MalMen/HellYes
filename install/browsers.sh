@@ -44,7 +44,21 @@ detect_firefox() {
 
 # Get the current working directory and native script path
 SCRIPT_DIR="$(pwd)"
-NATIVE_SCRIPT_PATH="$SCRIPT_DIR/native.py"
+
+# Try to find the standalone executable first (preferred)
+if [ -f "$SCRIPT_DIR/HellSharedNativeHost" ]; then
+    NATIVE_SCRIPT_PATH="$SCRIPT_DIR/HellSharedNativeHost"
+    echo "Using native host executable: $NATIVE_SCRIPT_PATH"
+elif [ -f "$SCRIPT_DIR/native.py" ]; then
+    NATIVE_SCRIPT_PATH="$SCRIPT_DIR/native.py"
+    # Make sure it's executable
+    chmod +x "$NATIVE_SCRIPT_PATH" 2>/dev/null || true
+    echo "Using native host script: $NATIVE_SCRIPT_PATH"
+else
+    echo "ERROR: Neither HellSharedNativeHost nor native.py found in $SCRIPT_DIR"
+    echo "Please run the build script or place native.py in the project directory."
+    exit 1
+fi
 
 # Build the JSON manifest for Chrome‑based browsers
 build_chrome_manifest() {

@@ -13,6 +13,10 @@ import json
 import platform
 import re
 import subprocess
+import shutil
+import tempfile
+import atexit
+import importlib.util
 from pathlib import Path
 
 # Import pexpect based on platform
@@ -24,11 +28,79 @@ from tkinter import *
 from tkinter import ttk, scrolledtext, messagebox
 from datetime import datetime
 
+# ============================================================================
+# PyInstaller bundled resource extraction
+# ============================================================================
+
+def get_resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller"""
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
+def extract_bundled_script(script_name):
+    """
+    Extract a bundled Python script to a temporary directory.
+    Returns the path to the extracted script.
+    """
+    # Check if running from PyInstaller bundle
+    if hasattr(sys, '_MEIPASS'):
+        # Running from bundle - extract to temp directory
+        source = get_resource_path(script_name)
+
+        # Create a persistent temp directory for our scripts
+        temp_dir = Path(tempfile.gettempdir()) / "hellshared_scripts"
+        temp_dir.mkdir(exist_ok=True)
+
+        dest = temp_dir / script_name
+
+        # Create parent directories if needed
+        dest.parent.mkdir(parents=True, exist_ok=True)
+
+        # Copy the script if it doesn't exist or source is newer
+        if not dest.exists() or os.path.getmtime(source) > os.path.getmtime(dest):
+            shutil.copy2(source, dest)
+
+        return str(dest)
+    else:
+        # Running from source - return the local path
+        return str(Path(".") / script_name)
+
+def extract_install_directory():
+    """
+    Extract the entire install directory if running from bundle.
+    """
+    if hasattr(sys, '_MEIPASS'):
+        source_dir = Path(get_resource_path("install"))
+        temp_dir = Path(tempfile.gettempdir()) / "hellshared_scripts" / "install"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+
+        # Copy all files from install directory
+        if source_dir.exists():
+            for item in source_dir.glob("*"):
+                dest = temp_dir / item.name
+                if item.is_file():
+                    if not dest.exists() or os.path.getmtime(item) > os.path.getmtime(dest):
+                        shutil.copy2(item, dest)
+
+        return str(temp_dir)
+    else:
+        return str(Path(".") / "install")
+
 # Configuration
 PENDING_DIR = Path("./pending")
 
 # Ensure directories exist
 PENDING_DIR.mkdir(exist_ok=True)
+
+# Extract bundled scripts (will be no-op if running from source)
+ALLHELL3_SCRIPT = extract_bundled_script("allhell3.py")
+DEPENDENCY_INSTALLER_SCRIPT = extract_bundled_script("dependency_installer_gui.py")
+INSTALL_DIR = extract_install_directory()
 
 
 class ProcessingTab:
@@ -40,30 +112,60 @@ class ProcessingTab:
         self.venv_python = venv_python
         self.parent_gui = parent_gui
         self.is_complete = False
+        self.is_stopped = False
         self.thread = None
+        self.process = None  # Track the subprocess/pexpect process
 
         # Create tab frame
         self.tab_frame = ttk.Frame(notebook)
         notebook.add(self.tab_frame, text=f"⏳ {filename[:30]}...")
 
-        # Create close button frame
-        close_frame = ttk.Frame(self.tab_frame)
-        close_frame.pack(fill=X, padx=5, pady=5)
-
-        self.close_button = ttk.Button(
-            close_frame,
-            text="Close Tab",
-            command=self.close_tab,
-            state=DISABLED  # Disabled until process completes
-        )
-        self.close_button.pack(side=RIGHT)
+        # Create button frame
+        button_frame = ttk.Frame(self.tab_frame)
+        button_frame.pack(fill=X, padx=5, pady=5)
 
         self.status_label = ttk.Label(
-            close_frame,
+            button_frame,
             text=f"Processing: {filename}",
             font=("Arial", 10, "bold")
         )
         self.status_label.pack(side=LEFT)
+
+        # Button container on the right
+        right_buttons = ttk.Frame(button_frame)
+        right_buttons.pack(side=RIGHT)
+
+        self.stop_button = ttk.Button(
+            right_buttons,
+            text="Stop",
+            command=self.stop_process,
+            state=NORMAL
+        )
+        self.stop_button.pack(side=LEFT, padx=2)
+
+        self.retry_button = ttk.Button(
+            right_buttons,
+            text="Retry",
+            command=self.retry_process,
+            state=DISABLED
+        )
+        self.retry_button.pack(side=LEFT, padx=2)
+
+        self.delete_button = ttk.Button(
+            right_buttons,
+            text="Delete & Skip",
+            command=self.delete_and_skip,
+            state=DISABLED
+        )
+        self.delete_button.pack(side=LEFT, padx=2)
+
+        self.close_button = ttk.Button(
+            right_buttons,
+            text="Close Tab",
+            command=self.close_tab,
+            state=DISABLED  # Disabled until process completes
+        )
+        self.close_button.pack(side=LEFT, padx=2)
 
         # Log area
         log_frame = ttk.Frame(self.tab_frame)
@@ -78,6 +180,97 @@ class ProcessingTab:
             insertbackground="white"
         )
         self.log_text.pack(fill=BOTH, expand=True)
+
+    def stop_process(self):
+        """Stop the currently running process"""
+        if self.is_complete or self.is_stopped:
+            return
+
+        self.is_stopped = True
+        self.log("=" * 60)
+        self.log("⏹ STOPPING PROCESS...")
+
+        # Terminate the process
+        try:
+            if self.process:
+                if platform.system() == 'Windows':
+                    self.process.terminate()
+                    self.log("Process terminated")
+                else:
+                    self.process.terminate()
+                    self.log("Process terminated")
+        except Exception as e:
+            self.log(f"Error terminating process: {e}")
+
+        # Update UI
+        self.stop_button.config(state=DISABLED)
+        self.retry_button.config(state=NORMAL)
+        self.delete_button.config(state=NORMAL)
+        self.close_button.config(state=NORMAL)
+
+        try:
+            tab_index = self.get_tab_index()
+            if tab_index is not None:
+                self.notebook.tab(tab_index, text=f"⏹ {self.filename[:30]}...")
+            self.status_label.config(text=f"⏹ Stopped: {self.filename}", foreground="orange")
+        except:
+            pass
+
+        self.log("Process stopped. Choose 'Retry' to try again or 'Delete & Skip' to remove the JSON file.")
+
+    def retry_process(self):
+        """Retry processing the file"""
+        self.log("=" * 60)
+        self.log("🔄 RETRYING PROCESS...")
+        self.log("=" * 60)
+
+        # Reset state
+        self.is_stopped = False
+        self.is_complete = False
+        self.process = None
+
+        # Update UI
+        self.stop_button.config(state=NORMAL)
+        self.retry_button.config(state=DISABLED)
+        self.delete_button.config(state=DISABLED)
+        self.close_button.config(state=DISABLED)
+
+        try:
+            tab_index = self.get_tab_index()
+            if tab_index is not None:
+                self.notebook.tab(tab_index, text=f"⏳ {self.filename[:30]}...")
+            self.status_label.config(text=f"Processing: {self.filename}", foreground="black")
+        except:
+            pass
+
+        # Start processing again
+        self.start_processing()
+
+    def delete_and_skip(self):
+        """Delete the JSON file and close the tab"""
+        try:
+            if os.path.exists(self.file_path):
+                os.remove(self.file_path)
+                self.log(f"✓ Deleted: {self.filename}")
+                self.log("File has been removed and will be skipped.")
+            else:
+                self.log("File no longer exists.")
+        except Exception as e:
+            self.log(f"✗ Error deleting file: {e}")
+            messagebox.showerror("Delete Error", f"Could not delete file:\n{e}")
+            return
+
+        # Mark as complete and allow closing
+        self.is_complete = True
+        self.close_button.config(state=NORMAL)
+
+        try:
+            tab_index = self.get_tab_index()
+            if tab_index is not None:
+                self.notebook.tab(tab_index, text=f"🗑 {self.filename[:30]}...")
+            self.status_label.config(text=f"🗑 Deleted: {self.filename}", foreground="gray")
+        except:
+            pass
 
     def log(self, message):
         """Add message to this tab's log"""
@@ -112,6 +305,9 @@ class ProcessingTab:
     def mark_complete(self, success):
         """Mark the processing as complete"""
         self.is_complete = True
+        self.stop_button.config(state=DISABLED)
+        self.retry_button.config(state=DISABLED)
+        self.delete_button.config(state=DISABLED)
         self.close_button.config(state=NORMAL)
 
         try:
@@ -158,35 +354,41 @@ class ProcessingTab:
                 self._process_unix()
 
         except Exception as e:
-            self.log(f"✗ Error processing {self.filename}: {str(e)}")
-            self.mark_complete(False)
+            if not self.is_stopped:
+                self.log(f"✗ Error processing {self.filename}: {str(e)}")
+                self.mark_complete(False)
 
     def _process_windows(self):
         """Windows-specific processing using subprocess"""
-        cmd = [self.venv_python, 'allhell3.py', self.file_path]
+        cmd = [self.venv_python, ALLHELL3_SCRIPT, self.file_path]
 
         # Create environment with UTF-8 encoding
         env = os.environ.copy()
         env['PYTHONIOENCODING'] = 'utf-8'
 
-        # Create process with pipes
-        proc = subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            universal_newlines=True,
-            env=env,
-            encoding='utf-8',
-            errors='replace'
-        )
+        # Create process with pipes (hide console window on Windows)
+        popen_kwargs = {
+            'stdin': subprocess.PIPE,
+            'stdout': subprocess.PIPE,
+            'stderr': subprocess.STDOUT,
+            'text': True,
+            'bufsize': 1,
+            'universal_newlines': True,
+            'env': env,
+            'encoding': 'utf-8',
+            'errors': 'replace'
+        }
+
+        # On Windows, hide console window
+        if platform.system() == 'Windows':
+            popen_kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+
+        self.process = subprocess.Popen(cmd, **popen_kwargs)
 
         # Send Enter immediately to auto-confirm
         try:
-            proc.stdin.write('\n')
-            proc.stdin.flush()
+            self.process.stdin.write('\n')
+            self.process.stdin.flush()
         except:
             pass
 
@@ -194,7 +396,10 @@ class ProcessingTab:
         last_progress_lines = {}
 
         # Read output line by line
-        for line in iter(proc.stdout.readline, ''):
+        for line in iter(self.process.stdout.readline, ''):
+            if self.is_stopped:
+                break
+
             if not line:
                 break
 
@@ -238,13 +443,17 @@ class ProcessingTab:
             if "Enter to run" in line or "Ctrl‑C to abort" in line:
                 self.log("[Auto-confirming - sending Enter...]")
                 try:
-                    proc.stdin.write('\n')
-                    proc.stdin.flush()
+                    self.process.stdin.write('\n')
+                    self.process.stdin.flush()
                 except:
                     pass
 
+        # If stopped, don't wait or mark complete
+        if self.is_stopped:
+            return
+
         # Wait for process to finish
-        exit_code = proc.wait()
+        exit_code = self.process.wait()
 
         self.log("=" * 60)
 
@@ -269,17 +478,20 @@ class ProcessingTab:
 
     def _process_unix(self):
         """Unix-specific processing using pexpect"""
-        cmd = f"{self.venv_python} allhell3.py '{self.file_path}'"
-        child = pexpect.spawn(cmd, timeout=30, encoding='utf-8', cwd=os.getcwd())
-        child.setwinsize(24, 120)
+        cmd = f"{self.venv_python} '{ALLHELL3_SCRIPT}' '{self.file_path}'"
+        self.process = pexpect.spawn(cmd, timeout=30, encoding='utf-8', cwd=os.getcwd())
+        self.process.setwinsize(24, 120)
 
         output_buffer = ""
         last_progress_lines = {}
 
         # Log output in real-time
         while True:
+            if self.is_stopped:
+                break
+
             try:
-                char = child.read_nonblocking(size=1, timeout=1)
+                char = self.process.read_nonblocking(size=1, timeout=1)
                 output_buffer += char
 
                 if '\n' in output_buffer or '\r' in output_buffer:
@@ -328,7 +540,7 @@ class ProcessingTab:
                     if clean_line:
                         self.log(clean_line)
                     self.log("[Auto-confirming - sending Enter...]")
-                    child.sendline('')
+                    self.process.sendline('')
                     output_buffer = ""
 
             except pexpect.TIMEOUT:
@@ -349,8 +561,12 @@ class ProcessingTab:
                         self.log(clean_line)
                 break
 
-        child.wait()
-        exit_code = child.exitstatus
+        # If stopped, don't wait or mark complete
+        if self.is_stopped:
+            return
+
+        self.process.wait()
+        exit_code = self.process.exitstatus
 
         self.log("=" * 60)
 
@@ -527,32 +743,54 @@ class AutoProcessorGUI:
         self.main_log("Main log cleared")
 
     def run_installer(self):
-        """Launch the dependency installer GUI"""
-        installer_script = Path("./dependency_installer_gui.py")
-
-        if not installer_script.exists():
-            messagebox.showerror(
-                "Installer Not Found",
-                "dependency_installer_gui.py not found in the current directory."
-            )
-            return
-
-        self.main_log("Launching dependency installer GUI...")
+        """Open the dependency installer GUI as a new window"""
+        self.main_log("Opening dependency installer...")
 
         try:
-            # Launch the installer GUI as a separate process
-            if platform.system() == 'Windows':
-                subprocess.Popen(['python', str(installer_script)])
-            else:
-                subprocess.Popen(['python3', str(installer_script)])
+            # Import the installer GUI class
+            import importlib.util
 
-            self.main_log("✓ Dependency installer GUI launched")
+            installer_script = Path(DEPENDENCY_INSTALLER_SCRIPT)
+
+            if not installer_script.exists():
+                messagebox.showerror(
+                    "Installer Not Found",
+                    f"dependency_installer_gui.py not found at: {installer_script}"
+                )
+                return
+
+            # Add the parent directory to sys.path so imports work
+            install_parent = Path(INSTALL_DIR).parent
+            if str(install_parent) not in sys.path:
+                sys.path.insert(0, str(install_parent))
+
+            # Also add the current directory
+            current_dir = os.getcwd()
+            if current_dir not in sys.path:
+                sys.path.insert(0, current_dir)
+
+            # Load the module dynamically
+            spec = importlib.util.spec_from_file_location("dependency_installer_gui", installer_script)
+            installer_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(installer_module)
+
+            # Create a new top-level window for the installer
+            installer_window = Toplevel(self.root)
+            installer_window.title("Dependency Installer")
+            installer_window.geometry("900x700")
+
+            # Create the installer GUI in this window, passing the install directory
+            installer_module.InstallerGUI(installer_window, install_dir=INSTALL_DIR)
+
+            self.main_log("✓ Dependency installer opened")
 
         except Exception as e:
-            self.main_log(f"✗ Error launching installer: {str(e)}")
+            self.main_log(f"✗ Error opening installer: {str(e)}")
+            import traceback
+            traceback.print_exc()
             messagebox.showerror(
                 "Launch Error",
-                f"Failed to launch installer:\n{str(e)}"
+                f"Failed to open installer:\n{str(e)}"
             )
 
     def check_browser_manifest(self):
