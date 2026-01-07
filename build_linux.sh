@@ -7,14 +7,64 @@ echo "HellShared Auto Processor - Linux Build"
 echo "========================================"
 echo
 
-# Check if PyInstaller is installed
-if ! python3 -c "import PyInstaller" 2>/dev/null; then
-    echo "PyInstaller not found. Installing..."
-    python3 -m pip install pyinstaller
-    if [ $? -ne 0 ]; then
-        echo "ERROR: Failed to install PyInstaller"
-        echo "Please install it manually: pip3 install pyinstaller"
-        exit 1
+# Try to setup virtual environment, fallback to system Python if it fails
+VENV_DIR="venv"
+USE_VENV=true
+
+# Check if venv exists and is valid
+if [ ! -f "$VENV_DIR/bin/activate" ]; then
+    echo "Creating virtual environment..."
+    # Remove broken venv if exists
+    rm -rf "$VENV_DIR"
+    if python3 -m venv "$VENV_DIR" 2>/dev/null; then
+        echo "Virtual environment created successfully"
+    else
+        echo "WARNING: Failed to create virtual environment (filesystem may not support symlinks)"
+        echo "Falling back to system Python with --break-system-packages"
+        USE_VENV=false
+        rm -rf "$VENV_DIR"  # Clean up broken venv
+    fi
+fi
+
+if [ "$USE_VENV" = true ]; then
+    # Activate virtual environment
+    echo "Activating virtual environment..."
+    source "$VENV_DIR/bin/activate"
+
+    # Check if PyInstaller is installed in venv
+    if ! python -c "import PyInstaller" 2>/dev/null; then
+        echo "Installing PyInstaller in virtual environment..."
+        pip install pyinstaller
+        if [ $? -ne 0 ]; then
+            echo "ERROR: Failed to install PyInstaller"
+            deactivate
+            exit 1
+        fi
+    fi
+
+    # Install project dependencies if requirements.txt exists
+    if [ -f "requirements.txt" ]; then
+        echo "Installing project dependencies..."
+        pip install -r requirements.txt -q
+    fi
+else
+    # Use system Python with --break-system-packages
+    # Add user's local bin to PATH
+    export PATH="$HOME/.local/bin:$PATH"
+
+    if ! python3 -c "import PyInstaller" 2>/dev/null; then
+        echo "Installing PyInstaller with --break-system-packages..."
+        python3 -m pip install --break-system-packages pyinstaller
+        if [ $? -ne 0 ]; then
+            echo "ERROR: Failed to install PyInstaller"
+            exit 1
+        fi
+    fi
+
+    # Install project dependencies if requirements.txt exists
+    if [ -f "requirements.txt" ]; then
+        echo "Installing project dependencies with --break-system-packages..."
+        python3 -m pip install --break-system-packages -r requirements.txt -q
     fi
 fi
 
@@ -29,6 +79,7 @@ pyinstaller --clean allhell3_auto_processor_onefile.spec
 if [ $? -ne 0 ]; then
     echo
     echo "ERROR: Main application build failed!"
+    [ "$USE_VENV" = true ] && deactivate
     exit 1
 fi
 
@@ -39,8 +90,12 @@ pyinstaller --clean native_host.spec
 if [ $? -ne 0 ]; then
     echo
     echo "ERROR: Native host build failed!"
+    [ "$USE_VENV" = true ] && deactivate
     exit 1
 fi
+
+# Deactivate virtual environment if using one
+[ "$USE_VENV" = true ] && deactivate
 
 echo
 echo "========================================"
