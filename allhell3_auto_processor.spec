@@ -6,11 +6,15 @@ Creates a standalone executable with all dependencies bundled
 
 import sys
 import platform
+import os
 
 block_cipher = None
 
 # Determine if we're on Windows
 is_windows = platform.system() == 'Windows'
+
+# Get absolute path to icon file
+icon_path = os.path.abspath('hellyes.ico')
 
 a = Analysis(
     ['allhell3_auto_processor.py'],
@@ -21,6 +25,8 @@ a = Analysis(
         ('allhell3.py', '.'),
         # Include dependency installer if needed
         ('dependency_installer_gui.py', '.'),
+        # Include app icon
+        ('browser-extension/logo/hellyes_original.png', 'browser-extension/logo'),
         # Include install scripts if they exist
         ('install/*.py', 'install'),
     ],
@@ -102,7 +108,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,  # Add icon path here if you have one: 'icon.ico' or 'icon.icns'
+    icon=icon_path if os.path.exists(icon_path) else None,  # Windows ICO
 )
 
 coll = COLLECT(

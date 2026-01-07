@@ -98,6 +98,24 @@ fi
 [ "$USE_VENV" = true ] && deactivate
 
 echo
+echo "Installing icon for Linux desktop integration..."
+# Install icon to user's local icon directory
+ICON_DIR="$HOME/.local/share/icons/hicolor"
+mkdir -p "$ICON_DIR/256x256/apps"
+
+if [ -f "browser-extension/logo/hellyes_original.png" ]; then
+    cp browser-extension/logo/hellyes_original.png "$ICON_DIR/256x256/apps/hellyes.png"
+    echo "✓ Icon installed to $ICON_DIR/256x256/apps/hellyes.png"
+
+    # Update icon cache if available
+    if command -v gtk-update-icon-cache &> /dev/null; then
+        gtk-update-icon-cache -f -t "$ICON_DIR" 2>/dev/null || true
+    fi
+else
+    echo "⚠ Warning: Icon file not found, skipping icon installation"
+fi
+
+echo
 echo "========================================"
 echo "Build completed successfully!"
 echo "========================================"
@@ -111,6 +129,7 @@ echo "- All Python dependencies included"
 echo "- allhell3.py bundled"
 echo "- dependency_installer_gui.py bundled"
 echo "- install/ scripts bundled"
+echo "- Application icon configured"
 echo
 echo "Native Host:"
 echo "- Communicates with browser extension"
@@ -123,9 +142,9 @@ echo "  ├── HellSharedAutoProcessor       ← Main app"
 echo "  └── HellSharedNativeHost          ← Browser host"
 echo
 echo "You can now:"
-echo "1. Copy both executables to any Linux machine"
-echo "2. Run ./HellSharedAutoProcessor (no Python installation required)"
-echo "3. Make executables if needed: chmod +x HellSharedAutoProcessor HellSharedNativeHost"
+echo "1. Run: ./dist/HellSharedAutoProcessor"
+echo "2. Copy both executables to any Linux machine"
+echo "3. Window icon automatically loads from bundled resources"
 echo
 echo "IMPORTANT: Users still need:"
 echo "- device.wvd file (place in same directory as executable)"

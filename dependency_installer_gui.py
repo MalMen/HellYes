@@ -396,7 +396,7 @@ class DependencyStep:
 class InstallerGUI:
     """Main installer GUI window"""
 
-    def __init__(self, root, install_dir=None):
+    def __init__(self, root, install_dir=None, skip_python_venv=False):
         self.root = root
         self.root.title("HellShared Dependency Installer")
         self.root.geometry("950x800")
@@ -409,6 +409,9 @@ class InstallerGUI:
         else:
             # Fallback to local install directory
             self.install_dir = Path("install")
+
+        # Flag to skip Python/venv checks (for compiled executables)
+        self.skip_python_venv = skip_python_venv
 
         self.steps = []
         self.current_step_index = 0
@@ -478,6 +481,15 @@ class InstallerGUI:
         canvas_frame = ttk.Frame(self.root)
         canvas_frame.pack(fill=BOTH, expand=True, padx=10, pady=10)
 
+        # Add scroll hint label at top
+        self.scroll_hint = ttk.Label(
+            canvas_frame,
+            text="↓ Scroll down to see all dependencies ↓",
+            font=("Arial", 9, "italic"),
+            foreground="gray",
+            background="white"
+        )
+
         # Create canvas and scrollbar
         canvas = Canvas(canvas_frame, bg="white")
         scrollbar = ttk.Scrollbar(canvas_frame, orient=VERTICAL, command=canvas.yview)
@@ -492,18 +504,56 @@ class InstallerGUI:
         )
 
         # Create window in canvas
-        canvas.create_window((0, 0), window=self.steps_frame, anchor="nw", width=850)
+        canvas_window = canvas.create_window((0, 0), window=self.steps_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Bind canvas resize to adjust frame width dynamically
+        def on_canvas_configure(event):
+            canvas.itemconfig(canvas_window, width=event.width)
+        canvas.bind("<Configure>", on_canvas_configure)
 
         # Pack canvas and scrollbar
         canvas.pack(side=LEFT, fill=BOTH, expand=True)
         scrollbar.pack(side=RIGHT, fill=Y)
 
-        # Enable mouse wheel scrolling
+        # Enable mouse wheel scrolling (Windows/macOS)
         def _on_mousewheel(event):
             canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            update_scroll_hint()
 
-        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        # Enable mouse wheel scrolling (Linux)
+        def _on_mousewheel_linux_up(event):
+            canvas.yview_scroll(-1, "units")
+            update_scroll_hint()
+
+        def _on_mousewheel_linux_down(event):
+            canvas.yview_scroll(1, "units")
+            update_scroll_hint()
+
+        # Bind to entire window so scrolling works anywhere
+        self.root.bind_all("<MouseWheel>", _on_mousewheel)  # Windows/macOS
+        self.root.bind_all("<Button-4>", _on_mousewheel_linux_up)  # Linux scroll up
+        self.root.bind_all("<Button-5>", _on_mousewheel_linux_down)  # Linux scroll down
+
+        # Update scroll hint visibility based on scroll position
+        def update_scroll_hint():
+            # Get current scroll position
+            yview = canvas.yview()
+            # Show hint only if not scrolled to bottom and there's content to scroll
+            if yview[1] < 1.0 and yview[0] < 0.5:
+                self.scroll_hint.place(relx=0.5, rely=0.0, anchor="n")
+            else:
+                self.scroll_hint.place_forget()
+
+        # Update hint when scrollbar moves
+        def on_scroll(*args):
+            canvas.yview(*args)
+            update_scroll_hint()
+
+        scrollbar.config(command=on_scroll)
+
+        # Initial hint update after a short delay
+        self.root.after(500, update_scroll_hint)
 
         # Buttons
         button_frame = ttk.Frame(self.root, padding="10")
@@ -537,29 +587,29 @@ class InstallerGUI:
         # Ensure bin directory exists
         Path("bin").mkdir(exist_ok=True)
 
-        # Step 1: Python
-        self.steps.append(DependencyStep(
-            self.steps_frame,
-            self,
-            "Python 3 & pip",
-            "Python 3 interpreter and pip package manager",
-            installer.check_python,
-            self.install_python,
-            auto_install=True
-        ))
+        # Step 1 & 2: Python and venv (skip for compiled executables)
+        if not self.skip_python_venv:
+            self.steps.append(DependencyStep(
+                self.steps_frame,
+                self,
+                "Python 3 & pip",
+                "Python 3 interpreter and pip package manager",
+                installer.check_python,
+                self.install_python,
+                auto_install=True
+            ))
 
-        # Step 2: Virtual Environment
-        self.steps.append(DependencyStep(
-            self.steps_frame,
-            self,
-            "Python Virtual Environment",
-            "Create venv and install Python dependencies from requirements.txt",
-            installer.check_venv,
-            self.install_venv,
-            auto_install=True
-        ))
+            self.steps.append(DependencyStep(
+                self.steps_frame,
+                self,
+                "Python Virtual Environment",
+                "Create venv and install Python dependencies from requirements.txt",
+                installer.check_venv,
+                self.install_venv,
+                auto_install=True
+            ))
 
-        # Step 3: Device WVD
+        # Step 3 (or 1 if skipping Python): Device WVD
         self.steps.append(DependencyStep(
             self.steps_frame,
             self,
@@ -890,9 +940,8 @@ class InstallerGUI:
         """Show interactive device.wvd installation wizard with auto-detection"""
         window = Toplevel(self.root)
         window.title("Widevine Device Installation Wizard")
-        window.geometry("800x600")
-        window.minsize(750, 550)  # Set minimum size
-        window.maxsize(1200, 800)  # Set max size for small screens
+        window.geometry("800x650")
+        window.minsize(750, 600)  # Set minimum size to ensure buttons are visible
         window.transient(self.root)
         window.grab_set()
         window.lift()
@@ -1088,9 +1137,8 @@ class InstallerGUI:
         """Show interactive N_m3u8DL-RE installation wizard with auto-detection"""
         window = Toplevel(self.root)
         window.title("N_m3u8DL-RE Installation Wizard")
-        window.geometry("800x550")
-        window.minsize(750, 500)
-        window.maxsize(1200, 800)
+        window.geometry("800x600")
+        window.minsize(750, 550)  # Set minimum size to ensure buttons are visible
         window.transient(self.root)
         window.grab_set()
         window.lift()
@@ -1281,9 +1329,8 @@ class InstallerGUI:
         """Show interactive FFmpeg installation wizard with auto-detection"""
         window = Toplevel(self.root)
         window.title("FFmpeg Installation Wizard")
-        window.geometry("800x600")
-        window.minsize(750, 550)
-        window.maxsize(1200, 800)
+        window.geometry("800x650")
+        window.minsize(750, 600)  # Set minimum size to ensure buttons are visible
         window.transient(self.root)
         window.grab_set()
         window.lift()
@@ -1600,9 +1647,8 @@ class InstallerGUI:
         """Show interactive mp4decrypt installation wizard with auto-detection"""
         window = Toplevel(self.root)
         window.title("mp4decrypt (Bento4) Installation Wizard")
-        window.geometry("800x550")
-        window.minsize(750, 500)
-        window.maxsize(1200, 800)
+        window.geometry("800x600")
+        window.minsize(750, 550)  # Set minimum size to ensure buttons are visible
         window.transient(self.root)
         window.grab_set()
         window.lift()
@@ -1792,9 +1838,8 @@ class InstallerGUI:
         """Show interactive mkvmerge installation wizard with auto-detection"""
         window = Toplevel(self.root)
         window.title("mkvmerge Installation Wizard")
-        window.geometry("800x550")
-        window.minsize(750, 500)
-        window.maxsize(1200, 800)
+        window.geometry("800x600")
+        window.minsize(750, 550)  # Set minimum size to ensure buttons are visible
         window.transient(self.root)
         window.grab_set()
         window.lift()
@@ -1988,9 +2033,8 @@ class InstallerGUI:
         """Show browser manifest installation wizard with separate buttons for Firefox and Chrome"""
         window = Toplevel(self.root)
         window.title("Browser Native Messaging Setup")
-        window.geometry("700x500")
-        window.minsize(650, 450)
-        window.maxsize(1000, 700)
+        window.geometry("750x550")
+        window.minsize(700, 500)  # Set minimum size to ensure buttons are visible
         window.transient(self.root)
         window.grab_set()
         window.lift()
@@ -2016,9 +2060,13 @@ class InstallerGUI:
         ), font=("Arial", 9), justify=LEFT)
         inst_text.pack(anchor=W)
 
-        # Current status
+        # Buttons frame (pack at bottom FIRST so it's always visible)
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(side=BOTTOM, fill=X, pady=(15, 0))
+
+        # Current status (pack after buttons, will fill remaining space)
         status_frame = ttk.LabelFrame(main_frame, text="Current Status", padding="10")
-        status_frame.pack(fill=X, pady=(10, 0))
+        status_frame.pack(fill=BOTH, expand=True, pady=(10, 10))
 
         status_text = scrolledtext.ScrolledText(status_frame, wrap=WORD, font=("Courier New", 9), height=8)
         status_text.pack(fill=BOTH, expand=True)
@@ -2070,9 +2118,7 @@ class InstallerGUI:
         # Initial status check
         update_status()
 
-        # Buttons frame
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(fill=X, pady=(15, 0))
+        # Note: button_frame already created and packed above with side=BOTTOM
 
         def install_firefox():
             """Install Firefox native messaging manifest"""
@@ -2147,42 +2193,69 @@ class InstallerGUI:
             # Create extension ID dialog
             id_dialog = Toplevel(window)
             id_dialog.title("Chrome Extension ID")
-            id_dialog.geometry("500x250")
+            id_dialog.geometry("550x350")
+            id_dialog.minsize(500, 330)  # Ensure minimum size to show all content
             id_dialog.transient(window)
             id_dialog.grab_set()
 
-            dialog_frame = ttk.Frame(id_dialog, padding="20")
+            dialog_frame = ttk.Frame(id_dialog, padding="15")
             dialog_frame.pack(fill=BOTH, expand=True)
 
-            ttk.Label(dialog_frame, text="Chrome Extension Configuration", font=("Arial", 12, "bold")).pack(pady=(0, 10))
+            # Button frame at the bottom (pack FIRST with side=BOTTOM)
+            btn_frame = ttk.Frame(dialog_frame)
+            btn_frame.pack(side=BOTTOM, fill=X, pady=(10, 0))
 
-            ttk.Label(dialog_frame, text="Select extension type:", font=("Arial", 10)).pack(anchor=W, pady=(10, 5))
+            # Content frame (pack after, will fill remaining space)
+            content_frame = ttk.Frame(dialog_frame)
+            content_frame.pack(fill=BOTH, expand=True)
+
+            ttk.Label(content_frame, text="Chrome Extension Configuration", font=("Arial", 12, "bold")).pack(pady=(0, 8))
+
+            ttk.Label(content_frame, text="Select extension type:", font=("Arial", 10)).pack(anchor=W, pady=(5, 5))
 
             extension_type = StringVar(value="compiled")
+            user_modified_id = [False]  # Track if user manually changed the ID
 
             ttk.Radiobutton(
-                dialog_frame,
+                content_frame,
                 text="Compiled Extension (Official - default)",
                 variable=extension_type,
                 value="compiled"
-            ).pack(anchor=W, padx=20)
+            ).pack(anchor=W, padx=20, pady=(0, 3))
 
             ttk.Radiobutton(
-                dialog_frame,
+                content_frame,
                 text="Unpacked Extension (Development mode)",
                 variable=extension_type,
                 value="unpacked"
-            ).pack(anchor=W, padx=20, pady=(5, 0))
+            ).pack(anchor=W, padx=20, pady=(0, 5))
 
-            # Extension ID input (for unpacked)
-            id_frame = ttk.Frame(dialog_frame)
-            id_frame.pack(fill=X, pady=(15, 0))
+            # Extension ID input
+            id_frame = ttk.Frame(content_frame)
+            id_frame.pack(fill=X, pady=(10, 0))
 
-            ttk.Label(id_frame, text="Extension ID (for unpacked):").pack(anchor=W)
+            ttk.Label(id_frame, text="Extension ID:").pack(anchor=W)
 
-            extension_id_var = StringVar(value="kiepegiehgkjkbebfagoadghjdfkegpc")
+            default_id = "kiepegiehgkjkbebfagoadghjdfkegpc"
+            extension_id_var = StringVar(value=default_id)
             id_entry = ttk.Entry(id_frame, textvariable=extension_id_var, width=40)
             id_entry.pack(fill=X, pady=(5, 0))
+
+            # Track manual changes to the ID field
+            def on_id_change(*args):
+                if extension_id_var.get() != default_id:
+                    user_modified_id[0] = True
+
+            extension_id_var.trace_add("write", on_id_change)
+
+            # Auto-fill ID based on extension type, but respect user changes
+            def on_type_change(*args):
+                if not user_modified_id[0]:
+                    if extension_type.get() == "compiled":
+                        extension_id_var.set(default_id)
+                    # For unpacked, keep the default but allow user to change
+
+            extension_type.trace_add("write", on_type_change)
 
             def on_install():
                 ext_type = extension_type.get()
@@ -2245,9 +2318,7 @@ class InstallerGUI:
                     except Exception as e:
                         self.show_error("Error", f"Installation error:\n{str(e)}")
 
-            btn_frame = ttk.Frame(dialog_frame)
-            btn_frame.pack(fill=X, pady=(15, 0))
-
+            # Note: btn_frame already created and packed above with side=BOTTOM
             ttk.Button(btn_frame, text="Install", command=on_install).pack(side=LEFT, padx=(0, 5))
             ttk.Button(btn_frame, text="Cancel", command=id_dialog.destroy).pack(side=LEFT)
 
@@ -2287,9 +2358,54 @@ class InstallerGUI:
         self.update_progress()
 
 
+def is_running_as_compiled():
+    """Detect if running as compiled executable (PyInstaller, Nuitka, etc.)"""
+    # PyInstaller creates a temp folder and stores path in _MEIPASS
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        return True
+
+    # Check for PyInstaller frozen attribute
+    if getattr(sys, 'frozen', False):
+        return True
+
+    # Nuitka sets __compiled__ attribute
+    if '__compiled__' in globals():
+        return True
+
+    # Check if executable name doesn't end with .py (but not -c or special cases)
+    argv0 = sys.argv[0]
+    if argv0 and not argv0.endswith('.py') and not argv0 in ['-c', '', '-m']:
+        # Additional check: make sure it's an actual file
+        import os
+        if os.path.isfile(argv0):
+            return True
+
+    return False
+
+
 def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="HellShared Dependency Installer")
+    parser.add_argument(
+        '--skip-python-venv',
+        action='store_true',
+        help='Skip Python and venv checks (for compiled executables)'
+    )
+    parser.add_argument(
+        '--install-dir',
+        type=str,
+        default=None,
+        help='Installation directory path'
+    )
+    args = parser.parse_args()
+
+    # Auto-detect if running as compiled executable
+    is_compiled = is_running_as_compiled()
+    skip_python = args.skip_python_venv or is_compiled
+
     root = Tk()
-    app = InstallerGUI(root)
+    app = InstallerGUI(root, install_dir=args.install_dir, skip_python_venv=skip_python)
     root.mainloop()
 
 

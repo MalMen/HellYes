@@ -595,6 +595,18 @@ class AutoProcessorGUI:
         self.root.title("allhell3 Auto Processor - Parallel Processing")
         self.root.geometry("1000x750")
 
+        # Set window icon
+        try:
+            icon_path = get_resource_path("browser-extension/logo/hellyes_original.png")
+            if os.path.exists(icon_path):
+                # For Windows and Linux
+                icon_img = PhotoImage(file=icon_path)
+                self.root.iconphoto(True, icon_img)
+                # Keep a reference to prevent garbage collection
+                self.root.icon_img = icon_img
+        except Exception as e:
+            print(f"Could not load icon: {e}")
+
         self.monitoring = False
         self.auto_process = True
         self.processed_files = set()
@@ -780,7 +792,9 @@ class AutoProcessorGUI:
             installer_window.geometry("900x700")
 
             # Create the installer GUI in this window, passing the install directory
-            installer_module.InstallerGUI(installer_window, install_dir=INSTALL_DIR)
+            # Skip Python/venv checks if running from compiled executable
+            skip_python_venv = hasattr(sys, '_MEIPASS') or getattr(sys, 'frozen', False)
+            installer_module.InstallerGUI(installer_window, install_dir=INSTALL_DIR, skip_python_venv=skip_python_venv)
 
             self.main_log("✓ Dependency installer opened")
 

@@ -68,6 +68,7 @@ echo - All Python dependencies included
 echo - allhell3.py bundled
 echo - dependency_installer_gui.py bundled
 echo - install/ scripts bundled
+echo - Application icon embedded in .exe
 echo.
 echo Native Host:
 echo - Communicates with browser extension
