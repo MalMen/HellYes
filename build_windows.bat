@@ -22,8 +22,22 @@ if errorlevel 1 (
 
 echo.
 echo Cleaning previous build...
-if exist build rmdir /s /q build
-if exist dist\HellSharedAutoProcessor rmdir /s /q dist\HellSharedAutoProcessor
+echo Checking if HellSharedAutoProcessor.exe is running...
+taskkill /F /IM HellSharedAutoProcessor.exe 2>nul
+timeout /t 2 /nobreak >nul
+
+if exist build rmdir /s /q build 2>nul
+if exist dist\HellSharedAutoProcessor.exe (
+    echo Removing old executable...
+    del /f /q dist\HellSharedAutoProcessor.exe 2>nul
+    if exist dist\HellSharedAutoProcessor.exe (
+        echo WARNING: Could not delete dist\HellSharedAutoProcessor.exe
+        echo Please close the application and any file explorers viewing it, then try again.
+        pause
+        exit /b 1
+    )
+)
+if exist dist\HellSharedAutoProcessor rmdir /s /q dist\HellSharedAutoProcessor 2>nul
 
 echo.
 echo Building main application executable...
