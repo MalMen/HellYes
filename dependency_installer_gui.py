@@ -93,46 +93,45 @@ class DependencyInstaller:
     @staticmethod
     def check_n_m3u8dl_re():
         """Check if N_m3u8DL-RE is available"""
-        # Check in bin/ first, then system PATH
-        if platform.system() == 'Windows':
-            if Path("bin/N_m3u8DL-RE.exe").exists():
-                return True
-        else:
-            if Path("bin/N_m3u8DL-RE").exists():
-                return True
+        # Check in bin/ first, then root directory, then system PATH
+        exe_name = "N_m3u8DL-RE.exe" if platform.system() == 'Windows' else "N_m3u8DL-RE"
+        if (Path("bin") / exe_name).exists():
+            return True
+        if Path(exe_name).exists():
+            return True
         return DependencyInstaller.check_command('N_m3u8DL-RE')
 
     @staticmethod
     def check_ffmpeg():
         """Check if ffmpeg is available"""
-        if platform.system() == 'Windows':
-            if Path("bin/ffmpeg.exe").exists():
-                return True
-        else:
-            if Path("bin/ffmpeg").exists():
-                return True
+        # Check in bin/ first, then root directory, then system PATH
+        exe_name = "ffmpeg.exe" if platform.system() == 'Windows' else "ffmpeg"
+        if (Path("bin") / exe_name).exists():
+            return True
+        if Path(exe_name).exists():
+            return True
         return DependencyInstaller.check_command('ffmpeg')
 
     @staticmethod
     def check_mp4decrypt():
         """Check if mp4decrypt is available"""
-        if platform.system() == 'Windows':
-            if Path("bin/mp4decrypt.exe").exists():
-                return True
-        else:
-            if Path("bin/mp4decrypt").exists():
-                return True
+        # Check in bin/ first, then root directory, then system PATH
+        exe_name = "mp4decrypt.exe" if platform.system() == 'Windows' else "mp4decrypt"
+        if (Path("bin") / exe_name).exists():
+            return True
+        if Path(exe_name).exists():
+            return True
         return DependencyInstaller.check_command('mp4decrypt')
 
     @staticmethod
     def check_mkvmerge():
         """Check if mkvmerge is available"""
-        if platform.system() == 'Windows':
-            if Path("bin/mkvmerge.exe").exists():
-                return True
-        else:
-            if Path("bin/mkvmerge").exists():
-                return True
+        # Check in bin/ first, then root directory, then system PATH
+        exe_name = "mkvmerge.exe" if platform.system() == 'Windows' else "mkvmerge"
+        if (Path("bin") / exe_name).exists():
+            return True
+        if Path(exe_name).exists():
+            return True
         return DependencyInstaller.check_command('mkvmerge')
 
     @staticmethod
@@ -341,13 +340,13 @@ class DependencyStep:
         if self.check():
             self.mark_complete(True)
             self.log("✅ Dependency found!", show_log=False)
-            messagebox.showinfo(
+            self.gui.show_info(
                 "Success!",
                 f"✅ {self.name} is now detected and ready to use!"
             )
         else:
             self.set_status("⚠️ Still Not Found", "orange")
-            messagebox.showwarning(
+            self.gui.show_warning(
                 "Not Found",
                 f"❌ {self.name} is still not detected.\n\nPlease follow the manual instructions and try again."
             )
@@ -360,12 +359,12 @@ class DependencyStep:
             try:
                 self.manual_instructions_func()
             except Exception as e:
-                messagebox.showerror(
+                self.gui.show_error(
                     "Error",
                     f"Failed to show manual instructions:\n{str(e)}"
                 )
         else:
-            messagebox.showinfo(
+            self.gui.show_info(
                 "Manual Installation",
                 f"Please install {self.name} manually.\n\nNo specific instructions available."
             )
@@ -659,7 +658,7 @@ class InstallerGUI:
             return
 
         # Ask for confirmation
-        if not messagebox.askyesno(
+        if not self.ask_yesno(
             "Start Installation",
             "This will install all missing dependencies.\n\n"
             "Some steps may require manual intervention.\n\n"
@@ -704,12 +703,12 @@ class InstallerGUI:
         all_complete = all(step.is_complete for step in self.steps)
 
         if all_complete:
-            messagebox.showinfo(
+            self.show_info(
                 "Installation Complete",
                 "✅ All dependencies are installed!\n\nYou can now use HellShared."
             )
         else:
-            messagebox.showwarning(
+            self.show_warning(
                 "Installation Incomplete",
                 "Some dependencies need manual installation.\n\n"
                 "Please follow the manual instructions for the incomplete steps."
@@ -1004,7 +1003,7 @@ class InstallerGUI:
 
                     self.update_progress()
 
-                    messagebox.showinfo(
+                    self.show_info(
                         "Success!",
                         "✅ device.wvd has been created successfully!\n\n"
                         "The wizard will now close."
@@ -1173,7 +1172,7 @@ class InstallerGUI:
 
                 self.update_progress()
 
-                messagebox.showinfo(
+                self.show_info(
                     "Success!",
                     "✅ N_m3u8DL-RE has been found and configured!\n\n"
                     "The wizard will now close."
@@ -1194,7 +1193,7 @@ class InstallerGUI:
 
                 self.update_progress()
 
-                messagebox.showinfo(
+                self.show_info(
                     "Success!",
                     "✅ N_m3u8DL-RE is installed in your system!\n\n"
                     "The wizard will now close."
@@ -1399,7 +1398,7 @@ class InstallerGUI:
 
                 self.update_progress()
 
-                messagebox.showinfo(
+                self.show_info(
                     "Success!",
                     "✅ FFmpeg has been found and configured!\n\n"
                     "The wizard will now close."
@@ -1420,7 +1419,7 @@ class InstallerGUI:
 
                 self.update_progress()
 
-                messagebox.showinfo(
+                self.show_info(
                     "Success!",
                     "✅ FFmpeg is installed in your system!\n\n"
                     "The wizard will now close."
@@ -1453,7 +1452,7 @@ class InstallerGUI:
 
             confirm_msg += "Continue?"
 
-            if not messagebox.askyesno("Install FFmpeg", confirm_msg):
+            if not self.ask_yesno("Install FFmpeg", confirm_msg):
                 log_message("Installation cancelled by user")
                 return
 
@@ -1679,7 +1678,7 @@ class InstallerGUI:
 
                 self.update_progress()
 
-                messagebox.showinfo(
+                self.show_info(
                     "Success!",
                     "✅ mp4decrypt has been found and configured!\n\n"
                     "The wizard will now close."
@@ -1700,7 +1699,7 @@ class InstallerGUI:
 
                 self.update_progress()
 
-                messagebox.showinfo(
+                self.show_info(
                     "Success!",
                     "✅ mp4decrypt is installed in your system!\n\n"
                     "The wizard will now close."
@@ -1868,7 +1867,7 @@ class InstallerGUI:
 
                 self.update_progress()
 
-                messagebox.showinfo(
+                self.show_info(
                     "Success!",
                     "✅ mkvmerge has been found and configured!\n\n"
                     "The wizard will now close."
@@ -1889,7 +1888,7 @@ class InstallerGUI:
 
                 self.update_progress()
 
-                messagebox.showinfo(
+                self.show_info(
                     "Success!",
                     "✅ mkvmerge is installed in your system!\n\n"
                     "The wizard will now close."
@@ -2127,7 +2126,7 @@ class InstallerGUI:
                 if ext_type == "compiled":
                     ext_id = "kiepegiehgkjkbebfagoadghjdfkegpc"  # Default compiled extension ID
                 elif not ext_id:
-                    messagebox.showerror("Error", "Please enter an extension ID for unpacked extension!", parent=id_dialog)
+                    self.show_error("Error", "Please enter an extension ID for unpacked extension!", parent=id_dialog)
                     return
 
                 id_dialog.destroy()
