@@ -1144,24 +1144,30 @@ class InstallerGUI:
             """Check if N_m3u8DL-RE exists"""
             log_message("Checking for N_m3u8DL-RE...")
 
-            # Check in bin/ directory - use platform-specific filename
-            if platform.system() == 'Windows':
-                bin_path = Path("./bin/N_m3u8DL-RE.exe")
-            else:
-                bin_path = Path("./bin/N_m3u8DL-RE")
+            # Check in bin/ directory and root - use platform-specific filename
+            exe_name = "N_m3u8DL-RE.exe" if platform.system() == 'Windows' else "N_m3u8DL-RE"
+            bin_path = Path("bin") / exe_name
+            root_path = Path(exe_name)
 
             system_path = DependencyInstaller.check_command('N_m3u8DL-RE')
 
+            found_path = None
             if bin_path.exists():
-                file_label.config(text=f"✅ N_m3u8DL-RE: Found in ./bin/", foreground="green")
+                found_path = bin_path
+            elif root_path.exists():
+                found_path = root_path
+
+            if found_path:
+                location = "bin/" if found_path == bin_path else "root directory"
+                file_label.config(text=f"✅ N_m3u8DL-RE: Found in {location}", foreground="green")
                 status_label.config(text="✅ N_m3u8DL-RE found!", foreground="green")
-                log_message(f"✅ Found: {bin_path.absolute()}")
+                log_message(f"✅ Found: {found_path.absolute()}")
 
                 # Check if executable (skip on Windows)
                 if platform.system() != 'Windows':
-                    if not bin_path.stat().st_mode & 0o111:
+                    if not found_path.stat().st_mode & 0o111:
                         log_message("⚠️  File is not executable. Making it executable...")
-                        bin_path.chmod(bin_path.stat().st_mode | 0o111)
+                        found_path.chmod(found_path.stat().st_mode | 0o111)
                         log_message("✅ File is now executable")
 
                 # Update the main installer step
@@ -1203,8 +1209,9 @@ class InstallerGUI:
 
             else:
                 file_label.config(text="❌ N_m3u8DL-RE: Not found", foreground="red")
-                status_label.config(text="⏳ Waiting for file to be placed in ./bin/", foreground="orange")
+                status_label.config(text="⏳ Waiting for file to be placed", foreground="orange")
                 log_message(f"❌ Not found in: {bin_path.absolute()}")
+                log_message(f"❌ Not found in: {root_path.absolute()}")
                 log_message("❌ Not found in system PATH")
                 log_message("⏳ Waiting for file...")
                 return False
@@ -1650,24 +1657,30 @@ class InstallerGUI:
             """Check if mp4decrypt exists"""
             log_message("Checking for mp4decrypt...")
 
-            # Check in bin/ directory - use platform-specific filename
-            if platform.system() == 'Windows':
-                bin_path = Path("./bin/mp4decrypt.exe")
-            else:
-                bin_path = Path("./bin/mp4decrypt")
+            # Check in bin/ directory and root - use platform-specific filename
+            exe_name = "mp4decrypt.exe" if platform.system() == 'Windows' else "mp4decrypt"
+            bin_path = Path("bin") / exe_name
+            root_path = Path(exe_name)
 
             system_path = DependencyInstaller.check_command('mp4decrypt')
 
+            found_path = None
             if bin_path.exists():
-                file_label.config(text=f"✅ mp4decrypt: Found in ./bin/", foreground="green")
+                found_path = bin_path
+            elif root_path.exists():
+                found_path = root_path
+
+            if found_path:
+                location = "bin/" if found_path == bin_path else "root directory"
+                file_label.config(text=f"✅ mp4decrypt: Found in {location}", foreground="green")
                 status_label.config(text="✅ mp4decrypt found!", foreground="green")
-                log_message(f"✅ Found: {bin_path.absolute()}")
+                log_message(f"✅ Found: {found_path.absolute()}")
 
                 # Check if executable (skip on Windows)
                 if platform.system() != 'Windows':
-                    if not bin_path.stat().st_mode & 0o111:
+                    if not found_path.stat().st_mode & 0o111:
                         log_message("⚠️  File is not executable. Making it executable...")
-                        bin_path.chmod(bin_path.stat().st_mode | 0o111)
+                        found_path.chmod(found_path.stat().st_mode | 0o111)
                         log_message("✅ File is now executable")
 
                 # Update the main installer step
@@ -1709,8 +1722,9 @@ class InstallerGUI:
 
             else:
                 file_label.config(text="❌ mp4decrypt: Not found", foreground="red")
-                status_label.config(text="⏳ Waiting for file to be placed in ./bin/", foreground="orange")
+                status_label.config(text="⏳ Waiting for file to be placed", foreground="orange")
                 log_message(f"❌ Not found in: {bin_path.absolute()}")
+                log_message(f"❌ Not found in: {root_path.absolute()}")
                 log_message("❌ Not found in system PATH")
                 log_message("⏳ Waiting for file...")
                 return False
@@ -1839,24 +1853,30 @@ class InstallerGUI:
             """Check if mkvmerge exists"""
             log_message("Checking for mkvmerge...")
 
-            # Check in bin/ directory - use platform-specific filename
-            if platform.system() == 'Windows':
-                bin_path = Path("./bin/mkvmerge.exe")
-            else:
-                bin_path = Path("./bin/mkvmerge")
+            # Check in bin/ directory and root - use platform-specific filename
+            exe_name = "mkvmerge.exe" if platform.system() == 'Windows' else "mkvmerge"
+            bin_path = Path("bin") / exe_name
+            root_path = Path(exe_name)
 
             system_path = DependencyInstaller.check_command('mkvmerge')
 
+            found_path = None
             if bin_path.exists():
-                file_label.config(text=f"✅ mkvmerge: Found in ./bin/", foreground="green")
+                found_path = bin_path
+            elif root_path.exists():
+                found_path = root_path
+
+            if found_path:
+                location = "bin/" if found_path == bin_path else "root directory"
+                file_label.config(text=f"✅ mkvmerge: Found in {location}", foreground="green")
                 status_label.config(text="✅ mkvmerge found!", foreground="green")
-                log_message(f"✅ Found: {bin_path.absolute()}")
+                log_message(f"✅ Found: {found_path.absolute()}")
 
                 # Check if executable (skip on Windows)
                 if platform.system() != 'Windows':
-                    if not bin_path.stat().st_mode & 0o111:
+                    if not found_path.stat().st_mode & 0o111:
                         log_message("⚠️  File is not executable. Making it executable...")
-                        bin_path.chmod(bin_path.stat().st_mode | 0o111)
+                        found_path.chmod(found_path.stat().st_mode | 0o111)
                         log_message("✅ File is now executable")
 
                 # Update the main installer step
@@ -1900,8 +1920,9 @@ class InstallerGUI:
                 file_label.config(text="❌ mkvmerge: Not found", foreground="red")
                 status_label.config(text="⏳ Waiting for mkvmerge to be installed", foreground="orange")
                 log_message(f"❌ Not found in: {bin_path.absolute()}")
+                log_message(f"❌ Not found in: {root_path.absolute()}")
                 log_message("❌ Not found in system PATH")
-                log_message("⏳ Install using package manager or place in ./bin/")
+                log_message("⏳ Install using package manager or place in bin/ or root directory")
                 return False
 
         # Add buttons
