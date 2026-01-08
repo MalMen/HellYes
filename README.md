@@ -3,144 +3,374 @@
 A Widevine Downloader with multi-browser support for Linux and Windows
 ======================================================================
 
-### Overview
+## Overview
 
-This repo is an adaptation from https://github.com/vinefeeder/HellYes
-*All original functions are still available.*
-Since the most difficult and boring part of working with these scripts is finding the correct urls to copy, I decided to easy that seek.
-Since the sources that we want to use are often behind login walls an yt-dlp command line would be more difficult so I decided to create an extension that will find the correct urls to copy and send them directly to our script
+HellYes is a powerful tool for downloading DRM-protected content using Widevine L3. This repository extends the original [vinefeeder/HellYes](https://github.com/vinefeeder/HellYes) project by adding:
 
-This was original tested on kubuntu but should work in any linux distro.
-For installation, you should run 
-`./install.sh`
-This will
-- Install all a python environment for this script
-- Check and guide you to install dependencies
-- Copy the Native Message in the right places (Native messages is what allow the browser to exchange messages with our script)
+- **Browser Extension** - Automatically captures MPD URLs and license requests
+- **Native Host Application** - Seamless communication between browser and Python scripts
+- **Automated Installer** - Guided setup for all dependencies and configurations
+- **Multi-Browser Support** - Works with Chrome, Firefox, Edge, and Brave on both Linux and Windows
 
-After that you can load extensions on your browser.
-A pre-compiled version can be found on this repository releases page
-If you choose to compile itself be aware that you will need the extension ID for chrome browsers (it is asked on install.sh)
+Instead of manually hunting through browser DevTools for MPD URLs and cURL commands, the HellYes browser extension does this automatically and sends the data directly to the download script.
 
-Any contribution towards this repository is appreciated
+## Installation
 
+### Quick Start (Recommended)
 
------- Original README by vinefeeder ------
-A generic L3 downloader for DRM content which comes in two versions
+Download the latest release from the [Releases page](https://github.com/MalMen/HellYes/releases):
 
-*   allhell3.py
-*   allhell3gui.py
-*   gui.py
+#### Windows
+1. Download `HellSharedAutoProcessor.win.zip`
+2. Extract to your desired location
+3. Run `HellSharedAutoProcessor.exe`
+4. Follow the guided installer to:
+   - Check and install required dependencies
+   - Configure browser extension support
+   - Set up the native messaging host
 
+#### Linux
+1. Download `HellSharedAutoProcessor.linux.tar.gz`
+2. Extract: `tar -xzf HellSharedAutoProcessor.linux.tar.gz`
+3. Navigate to the directory: `cd HellSharedAutoProcessor`
+4. Run: `./HellSharedAutoProcessor`
+5. Follow the guided installer to:
+   - Check and install required dependencies
+   - Configure browser extension support
+   - Set up the native messaging host
 
-Allhell3.py is coded for the all browsers (tested on Chrome, Firefox and Edge) and is supplied very nearly ready to download all media protected by widevine.
-You just need to provide a working Content Decryption Module and call it device.wvd and place it in the top level folder of HellYes
+### Browser Extension Installation
 
-gui.py is the latest Graphical User Interface version of allhell3.py. allhell3gui.py is the original gui version.
+After running the installer, install the browser extension:
 
-  
-In use, the style of entering data is a little different. allhell3.py uses a paste _without echo to the screen_, and uses Ctrl+D (Linux) or Ctrl+Z (Windows) to signal the end of the cURL input.  
-gui.py uses a paste _with echo to the screen_, and uses button clicks to process data.  
-Use whichever you like best on your system....  
-In both versions a downloader (N\_m3u8DL-RE) or Dash-mpd-cli may be used to download the media. Note that the dash-mpd-cli downloader will download subtitles as a separate file and it will NOT be muxed with the video.
+#### Chrome/Edge/Brave
 
+**Note:** The HellYes extension is not available on the Chrome Web Store. You must install it manually in developer mode.
 
-You will need you to download some helper software.
+1. Download `hellyes-chrome-source.zip` from the [Releases page](https://github.com/MalMen/HellYes/releases)
+2. Extract the ZIP file to a **permanent location** (don't delete this folder after installation)
+3. Open your browser and navigate to:
+   - Chrome: `chrome://extensions`
+   - Edge: `edge://extensions`
+   - Brave: `brave://extensions`
+4. Enable "Developer mode" (toggle in top-right corner)
+5. Click "Load unpacked"
+6. Select the extracted folder containing the extension files
 
-### Pre Use Instructions
+**Important:** Keep the extension folder in place. If you delete it, the extension will stop working.
 
-Install the following:
+**Alternative:** If you have issues with developer mode, you can try `hellyes-chrome-crx.zip` (signed version), but your browser may show security warnings.
 
-*   See the code at [https://github.com/nilaoda/N\_m3u8DL-RE](https://github.com/nilaoda/N_m3u8DL-RE), download the latest release. Unzip and save to a folder named 'binaries'. It can be anywhere on your system. So long as 'binaries' is in your Path.
-* s See the code at [https://github.com/emarsden/dash-mpd-cli/releases] for details of dash-mpd-cli downloader.
-*   Do the same with [ffmpeg](https://www.videohelp.com/software/ffmpeg) and [MKVToolNix](https://www.videohelp.com/software/MKVToolNix) etc.
-*   See [https://www.videohelp.com/software/ffmpeg](https://www.videohelp.com/software/ffmpeg) for more information about ffmpeg.
-*   See [https://www.videohelp.com/software/MKVToolNix](https://www.videohelp.com/software/MKVToolNix) for more information about MKVToolNix.
-*   See [https://www.bento4.com/downloads/](https://www.bento4.com/downloads/) for more information about Bento4.
-*   Since allhell3.py is a python script you also need [python or get it from Microsoft Store if on Windows](https://www.python.org/downloads/)
+#### Firefox
+1. Download `hellyes-firefox.xpi` from the [Releases page](https://github.com/MalMen/HellYes/releases)
+2. Open Firefox and navigate to `about:addons`
+3. Click the gear icon and select "Install Add-on From File..."
+4. Select the downloaded `hellyes-firefox.xpi` file
+5. Confirm the installation when prompted
 
-### How to Use
+### Manual Build (Advanced)
 
-You provide three bits of information taken from a web page and allhell3.py does the rest.
+If you prefer to build from source:
 
-You start a python script with 'python allhell3.py' written in a terminal or 'python3 gui.py'
+#### Windows
+```batch
+build_windows.bat
+```
 
-But python scripts typically use modules that are imported to the script
+#### Linux
+```bash
+./build_linux.sh
+```
 
-Usuallly we use 'pip install module-name' But if the script author has provided a requirements.txt file, then we can use 'pip install -r requirements.txt', so use that here.
+See [BUILDING.md](BUILDING.md) for detailed build instructions.
 
-If the bare pip install does not work, try 'python3 pip install -r requirements.txt', or failing that 'python -m pip install -r requirements.txt'. Google for 'using pip' if stuck.
+## How It Works
 
-On Windows, Microsoft Store has a Terminal App, find an install that to use for running python scripts.  
-On Linux You'll already know how to use xterm or whatever
+### Architecture
 
-#### You Provide
+```
+┌─────────────────┐
+│  Browser Tab    │
+│  (Website with  │
+│   DRM content)  │
+└────────┬────────┘
+         │
+         │ Intercepts network requests
+         ↓
+┌─────────────────┐
+│ HellYes Browser │
+│   Extension     │
+│ (Captures MPD & │
+│  License data)  │
+└────────┬────────┘
+         │
+         │ Native Messaging Protocol
+         ↓
+┌─────────────────┐
+│ Native Host     │
+│ (Message Relay) │
+└────────┬────────┘
+         │
+         │ JSON-RPC
+         ↓
+┌─────────────────┐
+│ HellYes Python  │
+│     Script      │
+│ (Downloads DRM  │
+│    content)     │
+└─────────────────┘
+```
 
-*   MPD URL
-*   cURL of license server request
-*   Video name
+### What the Extension Does
 
-After you provide the data, it will download the video using N\_m3u8DL-RE or dash-mpd-cli, should you wish, finding keys in the process.
+The HellYes browser extension monitors network traffic in your browser and automatically:
 
-#### You Find
+1. **Detects MPD URLs** - Identifies MPEG-DASH manifest files (`.mpd` extensions)
+2. **Captures License Requests** - Intercepts Widevine license server requests
+3. **Extracts Headers** - Records authentication cookies and headers
+4. **Sends to Script** - Packages all data and sends it to the Python script via native messaging
 
-*   MPD URL
+This eliminates the need to manually:
+- Open browser DevTools
+- Set up network filters
+- Copy MPD URLs
+- Copy cURL commands for license requests
 
-Copy and paste the MPD URL from the web page.
+## Usage
 
-![Example of mpd and license URL](images/selected_mpd_license.png)
+### Step 1: Start the Application
 
-For example, open this image in a new tab to see it full size.
+Run `HellSharedAutoProcessor` (or `HellSharedAutoProcessor.exe` on Windows).
 
-The image shows the MPD URL as the first entry. How would we know it was the right one? it has mpd written in it.
+The GUI will appear, ready to receive data from the browser extension.
 
-How did we open that tool in the browser? Press ctrl+shift+C
+### Step 2: Browse to DRM-Protected Content
 
-How did we hide all the other stuff a web page loads? We used a filter
+1. Open your browser with the HellYes extension installed
+2. Navigate to a website with DRM-protected video content
+3. Start playing the video (or let it load)
 
-![Example with filter](images/filter.png)
+### Step 3: Automatic Capture
 
-The filter is a regex or regular expression - it's a way of saying "find all the lines that contain mpd and license"
+The extension automatically:
+- Detects the MPD manifest URL
+- Captures the Widevine license request
+- Sends all data to the HellYes application
 
-the regex is "regexp:widevine|acquire|license|mpd" and it means "find all the lines that contain widevine or acquire or license or mpd". However, Chrome does not allow regexp: so use a single word like license or mpd etc.
+You'll see the captured data appear in the application window.
 
-With expereince you will learn that sites use different words to identify their license url.  
-And it the filter does not find it search with method:POST filter. POST messages are sent securely, most http traffic isn't. But licenses are.
+### Step 4: Download
 
-*   cURL of license server request
+1. Review the captured MPD URL and license information
+2. Enter a filename for the download
+3. Click "Download" to start the process
 
-Copy and paste the cURL of the license server request.
+The script will:
+- Fetch decryption keys from the license server
+- Download the encrypted video and audio streams
+- Decrypt the content
+- Mux everything into a single video file
 
-For example, open this image in a new tab to see it full size.
+### Extension Settings
 
-![Example of curl](images/selected_cURL.png)
+Click the extension icon to access settings:
 
-Which 'copy as cURL' to use? Windows - choose 'Copy as cURL (Posix)' if available or 'Copy as cURL (bash)'
+- **Auto-send to script** - Automatically send captured data (default: enabled)
+- **Show notifications** - Display browser notifications when data is captured
+- **Clear captured data** - Reset the extension state
 
-If using allhell3.py terminate your paste command and tell the script to process the cURL by using Ctrl+Z (Windows) or Ctrl+D (Linux).  
-Be prepared for the screen to write several blank lines, shifting existing text upwards rapidly.
+## Required Dependencies
 
-*   Video name
+The installer will check for and guide you through installing:
 
-Video name is requested once keys are found and the script is ready to download. The name does not need a file type extension added.
+### Core Dependencies
+- **Python 3.8+** - Required for running the download scripts
+- **FFmpeg** - For video/audio processing and muxing
+- **N_m3u8DL-RE** or **dash-mpd-cli** - For downloading DASH/HLS streams
 
-#### Allhell3 In action
+### Python Packages
+- `requests` - HTTP requests
+- `pycryptodome` - Cryptographic operations
+- `protobuf` - Widevine protocol
 
-Running the script. ![Example pasting mpd](images/enter_mpd.png) ![curl pastes to screen with echo and finds keys](images/keys.png)
+All Python dependencies are listed in `requirements.txt` and installed automatically.
 
-Note carefully: allhell3.py.py uses Ctrl + D to enter the cURL on Linux and Ctrl + Z on Windows. Nothing prints to the screen until Ctrl+D or Z is pressed.
+## Widevine CDM (Content Decryption Module)
 
-#### Allhell gui In action
+You need a valid Widevine L3 Content Decryption Module to decrypt content.
 
-![Starting GUI](images/gui2.png) ![Populating Data](images/gui3.png) ![N_m3u8DL-RE running in terminal](images/gui4.png) ![New Gui with reset and dash-mpd-cli download](images/gui5.png)
+### Option 1: Use Existing device.wvd
+1. Obtain a `device.wvd` file (not included in this repository)
+2. Place it in the HellYes root directory
+3. The script will use it automatically for decryption
 
-)
+### Option 2: Generate device.wvd from Keys
+If you have `client_id.bin` and `private_key.pem` files:
 
-#### Coping with 'key too small' errors.
+1. Place both files in the HellYes root directory
+2. Run the dependency installer
+3. The installer will automatically generate `device.wvd` from these files
 
-Part of the process of fetching decryption-keys involves the swapping of keys in a Diffie-Helman type process, to validate the authority of a user. Some servers with old hardware use keys that are small enough to crack by brute force. So most systems force the use of larger, more secure, keys.  
-The system will then reject the connection and complain 'keys are too small'. If that happens use the included script allhell3gui\_lowerDH.py which attempts to force the system to accept smaller keys.
+**Note:** Obtaining a CDM or key files is your responsibility. This project does not provide CDMs or keys.
 
-Happy allhell3.py!  
- 
-A\_n\_g\_e\_l\_a
+## Troubleshooting
+
+### Extension Not Connecting
+
+If the extension shows "Not connected" status:
+
+1. Verify the native host is installed:
+   - **Windows**: Check `HKEY_CURRENT_USER\Software\Google\Chrome\NativeMessagingHosts\com.hellyes.native`
+   - **Linux**: Check `~/.config/google-chrome/NativeMessagingHosts/com.hellyes.native.json`
+
+2. Ensure `HellSharedAutoProcessor` is running
+
+3. Restart your browser
+
+### No Data Being Captured
+
+1. Make sure you're on a page with DRM-protected content
+2. Try playing the video to trigger network requests
+3. Check the browser console for errors (F12 → Console tab)
+
+### Download Failures
+
+1. Verify all dependencies are installed (run the installer again)
+2. Check that you have a valid `device.wvd` file
+3. Ensure you have write permissions in the download directory
+4. Some content may be protected by additional restrictions
+
+### Windows Build Issues
+
+If you encounter "permission denied" errors when building:
+
+1. Close any running instances of `HellSharedAutoProcessor.exe`
+2. Close any File Explorer windows viewing the `dist/` folder
+3. Run `build_windows.bat` again
+
+## Advanced Usage
+
+### Command-Line Mode with JSON Input
+
+The modern `allhell3.py` script accepts JSON configuration files:
+
+```bash
+python allhell3.py path/to/config.json
+```
+
+The JSON file should contain:
+```json
+{
+  "manifestUrl": "https://example.com/manifest.mpd",
+  "licenseUrl": "https://example.com/license",
+  "bodyBase64": "base64_encoded_license_body",
+  "headers": {
+    "User-Agent": "...",
+    "Cookie": "..."
+  },
+  "title": "video_name"
+}
+```
+
+### Legacy Manual Input Mode
+
+For interactive manual input, use `allhell3o.py` (original version):
+
+```bash
+python allhell3o.py
+```
+
+This will prompt you for:
+1. **MPD URL** - Copy from browser DevTools Network tab
+2. **cURL command** - Right-click license request → Copy → Copy as cURL (paste without echo)
+3. Press **Ctrl+D** (Linux) or **Ctrl+Z** (Windows) to submit the cURL
+4. **Filename** - Desired output filename
+
+**Note:** The GUI version (`gui.py`) is deprecated. Use `HellSharedAutoProcessor` for the best graphical experience with full browser extension support.
+
+### Using Different Downloaders
+
+Edit the script to choose your preferred downloader:
+
+- **N_m3u8DL-RE** (default) - Faster, better for HLS/DASH
+- **dash-mpd-cli** - Simpler, downloads subtitles separately
+
+## Project Structure
+
+```
+HellYes/
+├── allhell3.py                    # Core download script (JSON input)
+├── allhell3o.py                   # Original script (interactive input)
+├── allhell3_auto_processor.py     # GUI application with extension support
+├── gui.py                         # Legacy GUI (deprecated)
+├── native_host.py                 # Native messaging relay
+├── dependency_installer_gui.py    # Guided installer
+├── browser-extension/             # Browser extension source
+│   ├── manifest.json
+│   ├── service-worker.js
+│   ├── contentScript.js
+│   └── popup/
+├── build_windows.bat              # Windows build script
+├── build_linux.sh                 # Linux build script
+└── requirements.txt               # Python dependencies
+```
+
+## Version Compatibility
+
+All components (browser extensions and native applications) share the same version number to ensure compatibility. Always download matching versions from the same release.
+
+## Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
+
+## Legal Disclaimer
+
+This tool is for educational and personal use only. Users are responsible for complying with:
+
+- Terms of Service of content providers
+- Copyright laws in their jurisdiction
+- DRM regulations and anti-circumvention laws
+
+The developers do not condone piracy or illegal content distribution.
+
+## Credits
+
+This version of HellYes is maintained by **[MalMen](https://github.com/MalMen)**.
+
+**Original Project:**
+- Original HellYes by [A_n_g_e_l_a (vinefeeder)](https://github.com/vinefeeder/HellYes)
+- Original core download functionality and Widevine integration
+
+**This Fork Adds:**
+- Browser extension for automatic data capture
+- Native messaging host for browser-script communication
+- Automated dependency installer with GUI
+- Cross-platform build system
+- Modern JSON-based workflow
+
+All original HellYes functionality remains available. Thank you to A_n_g_e_l_a for creating the foundation of this project.
+
+## License
+
+This project uses a **dual license** structure:
+
+- **Original HellYes code** by A_n_g_e_l_a: MIT License
+- **Browser extension and automation additions** by MalMen: GNU GPL v3
+
+The **combined work is distributed under GNU GPL v3**, which means:
+- ✅ You can use, modify, and distribute this software freely
+- ✅ You must make source code available for any distributed modifications
+- ✅ You must license modifications under GPL v3
+- ✅ You must preserve copyright notices
+
+This ensures the project remains open source. See [LICENSE](LICENSE) for full details.
+
+---
+
+**Happy downloading!**
+# HellYes

@@ -1,4 +1,24 @@
-MIT License
+DUAL LICENSE NOTICE
+===================
+
+This project contains code under two different licenses:
+
+1. ORIGINAL CODE (MIT License) - by A_n_g_e_l_a
+2. ADDITIONS AND MODIFICATIONS (GNU GPLv3) - by MalMen
+
+The entire combined work is distributed under the GNU GPL v3 license.
+See below for details.
+
+================================================================================
+
+ORIGINAL CODE - MIT LICENSE
+---------------------------
+
+Files from the original HellYes project (https://github.com/vinefeeder/HellYes):
+- allhell3o.py (original allhell3.py)
+- allhell3gui.py
+- gui.py
+- Core Widevine decryption logic
 
 Copyright (c) 2024 A_n_g_e_l_a
 
@@ -19,3 +39,54 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+================================================================================
+
+ADDITIONS AND MODIFICATIONS - GNU GPL v3
+----------------------------------------
+
+New and modified files by MalMen:
+- allhell3.py (modernized JSON version)
+- allhell3_auto_processor.py
+- native_host.py
+- dependency_installer_gui.py
+- browser-extension/* (all browser extension code)
+- build_windows.bat
+- build_linux.sh
+- .github/workflows/*
+- All build and automation infrastructure
+
+Copyright (c) 2025 MalMen
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+================================================================================
+
+COMBINED WORK DISTRIBUTION
+--------------------------
+
+The combined work (original code + additions) is distributed under the
+GNU General Public License v3. This means:
+
+- You can use, modify, and distribute this software
+- If you distribute modified versions, you MUST:
+  1. Make the source code available
+  2. License your modifications under GPL v3
+  3. Clearly indicate what changes you made
+  4. Preserve both copyright notices
+
+The MIT-licensed portions remain available under MIT license when used
+separately from the GPL-licensed additions.
+
+Full GNU GPL v3 text: https://www.gnu.org/licenses/gpl-3.0.txt

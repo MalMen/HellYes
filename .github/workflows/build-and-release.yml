@@ -59,19 +59,27 @@ jobs:
       - name: Create private key file
         run: echo "${{ secrets.PRIVATE_KEY }}" > private.pem
 
-      - name: Pack Chrome Extension
+      - name: Pack Chrome Extension (CRX)
         run: npx crx3 pack browser-extension -p private.pem
 
-      - name: Rename and Zip Chrome CRX
+      - name: Create Chrome archives
         run: |
+          # Create CRX archive for signed extension
           mv web-extension.crx hellyes-chrome.crx
-          zip hellyes-chrome.zip hellyes-chrome.crx
+          zip hellyes-chrome-crx.zip hellyes-chrome.crx
 
-      - name: Upload Chrome artifact
+          # Create source archive for developer mode installation
+          cd browser-extension
+          zip -r ../hellyes-chrome-source.zip . -x "*.DS_Store" -x "__MACOSX/*"
+          cd ..
+
+      - name: Upload Chrome artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Chrome-Extension
-          path: hellyes-chrome.zip
+          path: |
+            hellyes-chrome-crx.zip
+            hellyes-chrome-source.zip
           retention-days: 30
 
   firefox-extension:
@@ -251,16 +259,20 @@ jobs:
             ## HellYes v${{ env.EXT_VERSION }}
 
             ### Browser Extensions
-            - **Chrome/Edge/Brave**: `hellyes-chrome.zip`
-            - **Firefox**: `hellyes-firefox.xpi`
+            - **Chrome/Edge/Brave (Developer Mode)**: `hellyes-chrome-source.zip` - Extract and load unpacked in browser
+            - **Chrome/Edge/Brave (CRX)**: `hellyes-chrome-crx.zip` - Signed extension (may show warnings)
+            - **Firefox**: `hellyes-firefox.xpi` - Installable add-on
 
             ### Native Applications
             - **Windows**: `HellSharedAutoProcessor.win.zip`
             - **Linux**: `HellSharedAutoProcessor.linux.tar.gz`
 
             All components share the same version number to ensure compatibility.
+
+            **Note:** Chrome extensions are not on Chrome Web Store. Use the source zip and load in developer mode.
           files: |
-            hellyes-chrome.zip
+            hellyes-chrome-source.zip
+            hellyes-chrome-crx.zip
             hellyes-firefox.xpi
             HellSharedAutoProcessor.win.zip
             HellSharedAutoProcessor.linux.tar.gz
