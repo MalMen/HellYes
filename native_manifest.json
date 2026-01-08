@@ -1,9 +1,0 @@
-{
-  "name": "org.hellyes.hellyes",
-  "description": "Native messaging",
-  "path": "C:\\Users\\malmen\\Desktop\\HellYes\\native.bat",
-  "type": "stdio",
-  "allowed_extensions": [
-    "hellyes@hellyes.org"
-  ]
-}
