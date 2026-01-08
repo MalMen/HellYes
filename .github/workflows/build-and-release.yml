@@ -7,11 +7,42 @@ on:
       - feat/auto-builds
 
 jobs:
+  # Calculate version number based on existing tags
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch all tags
+
+      - name: Calculate next version
+        id: version
+        run: |
+          # Get the latest tag that matches the pattern 0.0.X
+          LATEST_TAG=$(git tag -l "0.0.*" | sort -V | tail -n 1)
+
+          if [ -z "$LATEST_TAG" ]; then
+            # No tags found, start from 0.0.1
+            NEW_VERSION="0.0.1"
+          else
+            # Extract the patch number and increment
+            PATCH=$(echo $LATEST_TAG | cut -d. -f3)
+            NEW_PATCH=$((PATCH + 1))
+            NEW_VERSION="0.0.$NEW_PATCH"
+          fi
+
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "Next version: $NEW_VERSION"
+
   # Browser extension builds
   chrome-extension:
+    needs: version
     runs-on: ubuntu-latest
     env:
-      EXT_VERSION: 0.0.${{ github.run_number }}
+      EXT_VERSION: ${{ needs.version.outputs.version }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -44,9 +75,10 @@ jobs:
           retention-days: 30
 
   firefox-extension:
+    needs: version
     runs-on: ubuntu-latest
     env:
-      EXT_VERSION: 0.0.${{ github.run_number }}
+      EXT_VERSION: ${{ needs.version.outputs.version }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -80,9 +112,10 @@ jobs:
 
   # Executable builds
   build-windows:
+    needs: version
     runs-on: windows-latest
     env:
-      EXT_VERSION: 0.0.${{ github.run_number }}
+      EXT_VERSION: ${{ needs.version.outputs.version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -129,9 +162,10 @@ jobs:
           retention-days: 30
 
   build-linux:
+    needs: version
     runs-on: ubuntu-latest
     env:
-      EXT_VERSION: 0.0.${{ github.run_number }}
+      EXT_VERSION: ${{ needs.version.outputs.version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -180,11 +214,14 @@ jobs:
 
   # Unified release
   release:
-    needs: [chrome-extension, firefox-extension, build-windows, build-linux]
+    needs: [version, chrome-extension, firefox-extension, build-windows, build-linux]
     runs-on: ubuntu-latest
     env:
-      EXT_VERSION: 0.0.${{ github.run_number }}
+      EXT_VERSION: ${{ needs.version.outputs.version }}
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
       - name: Download Chrome extension
         uses: actions/download-artifact@v4
         with:
@@ -205,7 +242,7 @@ jobs:
         with:
           name: HellSharedAutoProcessor-Linux
 
-      - name: Create GitHub Release
+      - name: Create GitHub Release and Tag
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ env.EXT_VERSION }}
@@ -227,5 +264,6 @@ jobs:
             hellyes-firefox.xpi
             HellSharedAutoProcessor.win.zip
             HellSharedAutoProcessor.linux.tar.gz
+          make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
