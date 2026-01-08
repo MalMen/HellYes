@@ -1,0 +1,280 @@
+name: Build and Release HellYes
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  # Calculate version number based on existing tags
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch all tags
+
+      - name: Calculate next version
+        id: version
+        run: |
+          # Get the latest tag that matches the pattern 0.0.X
+          LATEST_TAG=$(git tag -l "0.0.*" | sort -V | tail -n 1)
+
+          if [ -z "$LATEST_TAG" ]; then
+            # No tags found, start from 0.0.1
+            NEW_VERSION="0.0.1"
+          else
+            # Extract the patch number and increment
+            PATCH=$(echo $LATEST_TAG | cut -d. -f3)
+            NEW_PATCH=$((PATCH + 1))
+            NEW_VERSION="0.0.$NEW_PATCH"
+          fi
+
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "Next version: $NEW_VERSION"
+
+  # Browser extension builds
+  chrome-extension:
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      EXT_VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Update manifest version for Chrome
+        run: |
+          sed -i 's/"version": "[^"]*"/"version": "${{ env.EXT_VERSION }}"/' browser-extension/manifest.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Create private key file
+        run: echo "${{ secrets.PRIVATE_KEY }}" > private.pem
+
+      - name: Pack Chrome Extension (CRX)
+        run: npx crx3 pack browser-extension -p private.pem
+
+      - name: Create Chrome archives
+        run: |
+          # Create CRX archive for signed extension
+          mv web-extension.crx hellyes-chrome.crx
+          zip hellyes-chrome-crx.zip hellyes-chrome.crx
+
+          # Create source archive for developer mode installation
+          cd browser-extension
+          zip -r ../hellyes-chrome-source.zip . -x "*.DS_Store" -x "__MACOSX/*"
+          cd ..
+
+      - name: Upload Chrome artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Chrome-Extension
+          path: |
+            hellyes-chrome-crx.zip
+            hellyes-chrome-source.zip
+          retention-days: 30
+
+  firefox-extension:
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      EXT_VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Update manifest version for Firefox
+        run: |
+          sed -i 's/"version": "[^"]*"/"version": "${{ env.EXT_VERSION }}"/' browser-extension/manifest.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Sign Firefox Extension
+        run: |
+          npx web-ext sign -s browser-extension \
+          --artifacts-dir firefox-artifacts \
+          --channel unlisted \
+          --api-key ${{ secrets.FIREFOX_ISSUER }} \
+          --api-secret ${{ secrets.FIREFOX_SECRET }}
+
+      - name: Rename Firefox XPI
+        run: mv firefox-artifacts/*.xpi hellyes-firefox.xpi
+
+      - name: Upload Firefox artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Firefox-Extension
+          path: hellyes-firefox.xpi
+          retention-days: 30
+
+  # Executable builds
+  build-windows:
+    needs: version
+    runs-on: windows-latest
+    env:
+      EXT_VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller pillow
+          pip install -r requirements.txt
+
+      - name: Create icon file
+        run: |
+          python -c "from PIL import Image; img = Image.open('browser-extension/logo/hellyes_original.png'); img.save('hellyes.ico', format='ICO', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])"
+
+      - name: Build Windows executable
+        run: |
+          python -m PyInstaller --clean allhell3_auto_processor_onefile.spec
+          python -m PyInstaller --clean native_host.spec
+
+      - name: Prepare distribution directory
+        shell: cmd
+        run: |
+          mkdir HellSharedAutoProcessor
+          copy dist\HellSharedAutoProcessor.exe HellSharedAutoProcessor\
+          copy dist\HellSharedNativeHost.exe HellSharedAutoProcessor\
+          if exist README.md copy README.md HellSharedAutoProcessor\
+          if exist LICENSE copy LICENSE HellSharedAutoProcessor\
+          if exist BUILDING.md copy BUILDING.md HellSharedAutoProcessor\
+
+      - name: Create Windows archive
+        run: |
+          powershell Compress-Archive -Path HellSharedAutoProcessor -DestinationPath HellSharedAutoProcessor.win.zip
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HellSharedAutoProcessor-Windows
+          path: HellSharedAutoProcessor.win.zip
+          retention-days: 30
+
+  build-linux:
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      EXT_VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller pillow
+          pip install -r requirements.txt
+
+      - name: Create icon file
+        run: |
+          python -c "from PIL import Image; img = Image.open('browser-extension/logo/hellyes_original.png'); img.save('hellyes.ico', format='ICO', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])"
+
+      - name: Build Linux executable
+        run: |
+          pyinstaller --clean allhell3_auto_processor_onefile.spec
+          pyinstaller --clean native_host.spec
+
+      - name: Prepare distribution directory
+        run: |
+          mkdir -p HellSharedAutoProcessor
+          cp dist/HellSharedAutoProcessor HellSharedAutoProcessor/
+          cp dist/HellSharedNativeHost HellSharedAutoProcessor/
+          chmod +x HellSharedAutoProcessor/HellSharedAutoProcessor
+          chmod +x HellSharedAutoProcessor/HellSharedNativeHost
+          if [ -f README.md ]; then cp README.md HellSharedAutoProcessor/; fi
+          if [ -f LICENSE ]; then cp LICENSE HellSharedAutoProcessor/; fi
+          if [ -f BUILDING.md ]; then cp BUILDING.md HellSharedAutoProcessor/; fi
+
+      - name: Create Linux archive
+        run: |
+          tar -czf HellSharedAutoProcessor.linux.tar.gz HellSharedAutoProcessor
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HellSharedAutoProcessor-Linux
+          path: HellSharedAutoProcessor.linux.tar.gz
+          retention-days: 30
+
+  # Unified release
+  release:
+    needs: [version, chrome-extension, firefox-extension, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    env:
+      EXT_VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Download Chrome extension
+        uses: actions/download-artifact@v4
+        with:
+          name: Chrome-Extension
+
+      - name: Download Firefox extension
+        uses: actions/download-artifact@v4
+        with:
+          name: Firefox-Extension
+
+      - name: Download Windows executable
+        uses: actions/download-artifact@v4
+        with:
+          name: HellSharedAutoProcessor-Windows
+
+      - name: Download Linux executable
+        uses: actions/download-artifact@v4
+        with:
+          name: HellSharedAutoProcessor-Linux
+
+      - name: Create GitHub Release and Tag
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.EXT_VERSION }}
+          name: HellYes v${{ env.EXT_VERSION }}
+          body: |
+            ## HellYes v${{ env.EXT_VERSION }}
+
+            ### Browser Extensions
+            - **Chrome/Edge/Brave (Developer Mode)**: `hellyes-chrome-source.zip` - Extract and load unpacked in browser
+            - **Chrome/Edge/Brave (CRX)**: `hellyes-chrome-crx.zip` - Signed extension (may show warnings)
+            - **Firefox**: `hellyes-firefox.xpi` - Installable add-on
+
+            ### Native Applications
+            - **Windows**: `HellSharedAutoProcessor.win.zip`
+            - **Linux**: `HellSharedAutoProcessor.linux.tar.gz`
+
+            All components share the same version number to ensure compatibility.
+
+            **Note:** Chrome extensions are not on Chrome Web Store. Use the source zip and load in developer mode.
+          files: |
+            hellyes-chrome-source.zip
+            hellyes-chrome-crx.zip
+            hellyes-firefox.xpi
+            HellSharedAutoProcessor.win.zip
+            HellSharedAutoProcessor.linux.tar.gz
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
